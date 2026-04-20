@@ -1,0 +1,213 @@
+import type { FormEvent } from 'react'
+import { useState } from 'react'
+import { ArrowRight } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+
+import { BrandIcon } from '@/components/BrandIcon'
+import { BrandMark } from '@/components/BrandMark'
+import { ThemeSwitch } from '@/components/ThemeSwitch'
+import { getApiErrorMessage } from '@/services/api/errors'
+import { authService } from '@/services/auth'
+import { useToastStore } from '@/store/useToastStore'
+
+export function SignupPage() {
+  const navigate = useNavigate()
+  const addToast = useToastStore((state) => state.addToast)
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  function showSignupError(title: string, message: string) {
+    setError(message)
+    addToast({
+      tone: 'error',
+      title,
+      description: message,
+    })
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setIsSubmitting(true)
+    setError(null)
+
+    const normalizedEmail = email.trim()
+    const normalizedName = name.trim()
+
+    if (!normalizedName) {
+      showSignupError('Nome obrigatório', 'Informe seu nome para criar a conta.')
+      setIsSubmitting(false)
+      return
+    }
+
+    if (!normalizedEmail) {
+      showSignupError('Email obrigatório', 'Informe seu email.')
+      setIsSubmitting(false)
+      return
+    }
+
+    if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
+      showSignupError('Email inválido', 'Digite um email válido.')
+      setIsSubmitting(false)
+      return
+    }
+
+    if (!password) {
+      showSignupError('Senha obrigatoria', 'Crie uma senha.')
+      setIsSubmitting(false)
+      return
+    }
+
+    if (password.length < 8) {
+      showSignupError('Senha curta', 'A senha precisa ter pelo menos 8 caracteres.')
+      setIsSubmitting(false)
+      return
+    }
+
+    if (password !== confirmPassword) {
+      const message = 'As senhas não coincidem.'
+
+      showSignupError('Senhas diferentes', message)
+      setIsSubmitting(false)
+      return
+    }
+
+    try {
+      await authService.register({
+        name: normalizedName,
+        email: normalizedEmail,
+        password,
+        password_confirmation: confirmPassword,
+      })
+      addToast({
+        tone: 'success',
+        title: 'Conta criada',
+        description: 'Agora você já pode entrar com seu email e senha.',
+      })
+      navigate('/login', { replace: true })
+    } catch (error: unknown) {
+      const message = getApiErrorMessage(
+        error,
+        'Não foi possível criar a conta. Revise os dados e tente novamente.',
+      )
+
+      setError(message)
+      addToast({
+        tone: 'error',
+        title: 'Cadastro não concluído',
+        description: message,
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="login-page">
+      <div className="login-background" aria-hidden="true">
+        <div className="visual-orb visual-orb--one" />
+        <div className="visual-orb visual-orb--two" />
+        <div className="visual-orb visual-orb--three" />
+        <div className="visual-grid" />
+      </div>
+
+      <div className="login-container">
+        <header className="login-header">
+          <div className="login-header__brand">
+            <BrandMark />
+          </div>
+          <ThemeSwitch />
+        </header>
+
+        <main className="login-main">
+          <div className="login-content">
+            <div className="login-intro">
+              <div className="login-logo">
+                <BrandIcon className="login-logo__image" size={96} />
+              </div>
+              <h1>Criar Conta</h1>
+              <p>
+                Crie sua conta para receber orçamento, reservar uma janela e acompanhar
+                seu boost sem conversa perdida.
+              </p>
+            </div>
+
+            <div className="auth-benefits" aria-label="Beneficios ao criar conta">
+              <span>Orçamento rápido</span>
+              <span>Boosters verificados</span>
+              <span>Histórico do pedido</span>
+            </div>
+
+            <form className="login-form" onSubmit={handleSubmit} noValidate>
+              <div className="form-group">
+                <input
+                  id="name"
+                  autoComplete="name"
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="Nome"
+                  type="text"
+                  value={name}
+                  className="simple-input"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <input
+                  id="email"
+                  autoComplete="email"
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="Email"
+                  type="email"
+                  value={email}
+                  className="simple-input"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <input
+                  id="password"
+                  autoComplete="new-password"
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Senha"
+                  type="password"
+                  value={password}
+                  className="simple-input"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <input
+                  id="confirmPassword"
+                  autoComplete="new-password"
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  placeholder="Confirmar Senha"
+                  type="password"
+                  value={confirmPassword}
+                  className="simple-input"
+                  required
+                />
+              </div>
+
+              {error ? <p className="form-error">{error}</p> : null}
+
+              <button className="login-submit" disabled={isSubmitting} type="submit">
+                {isSubmitting ? 'Criando...' : 'Criar Conta'}
+                {!isSubmitting && <ArrowRight size={18} strokeWidth={2} />}
+              </button>
+            </form>
+
+            <p className="signup-link">
+              Já tem uma conta? <Link to="/login">Entrar</Link>
+            </p>
+          </div>
+        </main>
+      </div>
+    </div>
+  )
+}

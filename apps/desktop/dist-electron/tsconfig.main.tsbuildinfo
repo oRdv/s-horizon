@@ -1,0 +1,1 @@
+{"root":["../electron/main.ts","../electron/preload.ts","../electron/services/backendreporter.ts","../electron/services/lcumonitor.ts","../electron/services/sessionstore.ts","../shared/types.ts"],"version":"6.0.2"}
