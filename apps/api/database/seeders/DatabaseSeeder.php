@@ -2,9 +2,11 @@
 
 namespace Database\Seeders;
 
+use App\Enums\UserRole;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
@@ -16,10 +18,16 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         User::query()->updateOrCreate([
-            'email' => 'captain@horizonboost.gg',
+            'email' => 'boosthorizon@gmail.com',
         ], [
-            'name' => 'Horizon Captain',
-            'password' => 'Horizon123!',
+            'name' => 'Boost Horizon Master',
+            'password' => Hash::make('boosthorizon123'),
+            'role' => UserRole::MasterAdmin->value,
+            'staff_profile' => null,
+            'permissions' => null,
+            'is_active' => true,
+            'email_verified_at' => now(),
+            'approved_at' => now(),
         ]);
     }
 }

@@ -28,25 +28,18 @@ const initialState: MonitorState = {
   lastError: null,
 }
 
-const themeOptions = ['mono', 'crimson'] as const
-
 function App() {
   const [monitorState, setMonitorState] = useState<MonitorState>(initialState)
   const [apiBaseUrl, setApiBaseUrl] = useState('http://127.0.0.1:8000')
   const [accessToken, setAccessToken] = useState('')
   const [refreshToken, setRefreshToken] = useState('')
   const [isSaving, setIsSaving] = useState(false)
-  const [theme, setTheme] = useState<(typeof themeOptions)[number]>('mono')
 
   function hydrateFormFromState(state: MonitorState) {
     if (state.session?.apiBaseUrl) {
       setApiBaseUrl((currentValue) => currentValue || state.session?.apiBaseUrl || '')
     }
   }
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme
-  }, [theme])
 
   useEffect(() => {
     if (!window.horizonBoostDesktop) {
@@ -135,26 +128,13 @@ function App() {
       <header className="desktop-shell__header">
         <div className="brand-row">
           <div className="brand-row__icon">
-            <img alt="" aria-hidden="true" src="/horizon-poro.png" />
+            <img alt="" aria-hidden="true" src="/horizon-poro-transparent.png" />
           </div>
 
           <div>
             <span className="eyebrow">Desktop Monitor</span>
             <h1>Horizon Boost</h1>
           </div>
-        </div>
-
-        <div className="theme-toggle">
-          {themeOptions.map((option) => (
-            <button
-              className={option === theme ? 'is-active' : undefined}
-              key={option}
-              onClick={() => setTheme(option)}
-              type="button"
-            >
-              {option === 'mono' ? 'Black / White' : 'Black / Red'}
-            </button>
-          ))}
         </div>
       </header>
 

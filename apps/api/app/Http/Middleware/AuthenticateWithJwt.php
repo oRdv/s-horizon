@@ -49,6 +49,12 @@ class AuthenticateWithJwt
             ], 401);
         }
 
+        if (! $user->is_active) {
+            return response()->json([
+                'message' => 'Sua conta está desativada. Fale com o suporte.',
+            ], 403);
+        }
+
         $request->setUserResolver(fn (): User => $user);
         Auth::setUser($user);
 

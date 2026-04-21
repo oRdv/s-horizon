@@ -1,30 +1,5 @@
 :root {
   font-family: 'Space Grotesk', sans-serif;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-html[data-theme='mono'] {
-  --bg: #060606;
-  --surface: rgba(16, 16, 16, 0.88);
-  --border: rgba(255, 255, 255, 0.1);
-  --text: #f7f7f7;
-  --text-muted: #a3a3a3;
-  --accent: #ffffff;
-  --accent-soft: rgba(255, 255, 255, 0.08);
-  --accent-glow: rgba(255, 255, 255, 0.18);
-  --danger: #ff8f8f;
-  --danger-bg: rgba(255, 143, 143, 0.08);
-  --positive: #d7f7dc;
-  --positive-bg: rgba(215, 247, 220, 0.1);
-  --field-bg: rgba(255, 255, 255, 0.06);
-}
-
-html[data-theme='crimson'] {
   --bg: #050304;
   --surface: rgba(20, 10, 12, 0.9);
   --border: rgba(255, 80, 80, 0.18);
@@ -38,6 +13,12 @@ html[data-theme='crimson'] {
   --positive: #ffd9d9;
   --positive-bg: rgba(255, 130, 130, 0.12);
   --field-bg: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 * {
@@ -105,7 +86,6 @@ textarea {
 
 .desktop-shell__header,
 .brand-row,
-.theme-toggle,
 .hero-panel__signals,
 .session-form__actions {
   display: flex;
@@ -187,26 +167,6 @@ textarea {
 .trace-panel p,
 .trace-footnote {
   color: var(--text-muted);
-}
-
-.theme-toggle {
-  padding: 0.3rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.theme-toggle button {
-  border: 0;
-  padding: 0.65rem 0.95rem;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text-muted);
-}
-
-.theme-toggle button.is-active {
-  background: var(--accent-soft);
-  color: var(--text);
 }
 
 .signals-grid,

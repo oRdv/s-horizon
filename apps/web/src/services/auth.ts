@@ -7,6 +7,7 @@ import type { AuthResponse, AuthUser, MeResponse } from '@/types/auth'
 export interface LoginCredentials {
   email: string
   password: string
+  two_factor_code?: string
 }
 
 export interface RegisterCredentials {
@@ -30,8 +31,12 @@ export const authService = {
     return response.data.data.user
   },
 
-  async register(credentials: RegisterCredentials): Promise<void> {
-    await apiClient.post('/auth/register', credentials)
+  async register(credentials: RegisterCredentials): Promise<AuthResponse> {
+    const response = await apiClient.post<AuthResponse>('/auth/register', credentials)
+
+    useSessionStore.getState().setSession(response.data)
+
+    return response.data
   },
 
   async fetchMe(): Promise<AuthUser> {

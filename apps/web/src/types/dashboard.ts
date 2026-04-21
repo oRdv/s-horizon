@@ -1,5 +1,4 @@
 export type BoosterStatus = 'online' | 'in_match'
-export type ThemeVariant = 'mono' | 'crimson'
 
 export interface UpcomingService {
   id: string

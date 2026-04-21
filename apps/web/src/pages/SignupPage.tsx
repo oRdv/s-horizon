@@ -5,7 +5,7 @@ import { Link, useNavigate } from 'react-router-dom'
 
 import { BrandIcon } from '@/components/BrandIcon'
 import { BrandMark } from '@/components/BrandMark'
-import { ThemeSwitch } from '@/components/ThemeSwitch'
+import { PasswordField } from '@/components/PasswordField'
 import { getApiErrorMessage } from '@/services/api/errors'
 import { authService } from '@/services/auth'
 import { useToastStore } from '@/store/useToastStore'
@@ -82,12 +82,13 @@ export function SignupPage() {
         password,
         password_confirmation: confirmPassword,
       })
+
       addToast({
         tone: 'success',
         title: 'Conta criada',
-        description: 'Agora você já pode entrar com seu email e senha.',
+        description: 'Enviamos um código para confirmar seu e-mail antes de liberar o painel.',
       })
-      navigate('/login', { replace: true })
+      navigate('/verify-email', { replace: true })
     } catch (error: unknown) {
       const message = getApiErrorMessage(
         error,
@@ -119,7 +120,6 @@ export function SignupPage() {
           <div className="login-header__brand">
             <BrandMark />
           </div>
-          <ThemeSwitch />
         </header>
 
         <main className="login-main">
@@ -128,17 +128,18 @@ export function SignupPage() {
               <div className="login-logo">
                 <BrandIcon className="login-logo__image" size={96} />
               </div>
-              <h1>Criar Conta</h1>
+              <h1>Criar conta de cliente</h1>
               <p>
-                Crie sua conta para receber orçamento, reservar uma janela e acompanhar
-                seu boost sem conversa perdida.
+                Esse cadastro cria uma conta comum de cliente para ver preços, abrir
+                pedidos e acompanhar compras. Para virar booster, use a inscrição
+                separada na landing page.
               </p>
             </div>
 
             <div className="auth-benefits" aria-label="Beneficios ao criar conta">
-              <span>Orçamento rápido</span>
+              <span>Pedido como cliente</span>
               <span>Boosters verificados</span>
-              <span>Histórico do pedido</span>
+              <span>Histórico de compras</span>
             </div>
 
             <form className="login-form" onSubmit={handleSubmit} noValidate>
@@ -169,12 +170,11 @@ export function SignupPage() {
               </div>
 
               <div className="form-group">
-                <input
+                <PasswordField
                   id="password"
                   autoComplete="new-password"
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder="Senha"
-                  type="password"
                   value={password}
                   className="simple-input"
                   required
@@ -182,12 +182,11 @@ export function SignupPage() {
               </div>
 
               <div className="form-group">
-                <input
+                <PasswordField
                   id="confirmPassword"
                   autoComplete="new-password"
                   onChange={(event) => setConfirmPassword(event.target.value)}
                   placeholder="Confirmar Senha"
-                  type="password"
                   value={confirmPassword}
                   className="simple-input"
                   required

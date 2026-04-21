@@ -98,6 +98,15 @@ function translateValidationMessage(field: string, message: string): string {
 function translateGenericMessage(message: string): string {
   const normalized = message.toLowerCase()
 
+  if (
+    normalized.includes('smtp') ||
+    normalized.includes('mailer') ||
+    normalized.includes('badcredentials') ||
+    normalized.includes('username and password not accepted')
+  ) {
+    return 'Não conseguimos enviar o e-mail agora. Verifique a configuração SMTP da Horizon Boost.'
+  }
+
   if (normalized.includes('the given data was invalid')) {
     return 'Revise os dados do formulário e tente novamente.'
   }

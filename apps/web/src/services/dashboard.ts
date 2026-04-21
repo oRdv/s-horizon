@@ -1,7 +1,6 @@
 import type {
   BoosterStatus,
   DashboardOverview,
-  ThemeVariant,
 } from '@/types/dashboard'
 
 interface DashboardPreferences {
@@ -99,9 +98,4 @@ export const dashboardService = {
 
     return nextPreferences.status
   },
-}
-
-export const themeLabels: Record<ThemeVariant, string> = {
-  mono: 'Black / White',
-  crimson: 'Black / Red',
 }

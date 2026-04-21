@@ -10,7 +10,7 @@ export function BrandIcon({ size = 40, className }: BrandIconProps) {
       aria-hidden="true"
       className={className}
       height={size}
-      src="/horizon-poro.png"
+      src="/horizon-poro-transparent.png"
       width={size}
     />
   )

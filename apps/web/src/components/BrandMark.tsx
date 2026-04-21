@@ -10,7 +10,7 @@ interface BrandMarkProps {
 export function BrandMark({ compact = false }: BrandMarkProps) {
   return (
     <Link
-      aria-label="Ir para a landing page da Horizon Boost"
+      aria-label="Ir para a página principal da Horizon Boost"
       className={clsx('brand-mark', compact && 'brand-mark--compact')}
       to="/"
     >

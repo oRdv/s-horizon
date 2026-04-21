@@ -5,7 +5,7 @@ import { Link, useNavigate } from 'react-router-dom'
 
 import { BrandIcon } from '@/components/BrandIcon'
 import { BrandMark } from '@/components/BrandMark'
-import { ThemeSwitch } from '@/components/ThemeSwitch'
+import { PasswordField } from '@/components/PasswordField'
 import { getApiErrorMessage } from '@/services/api/errors'
 import { authService } from '@/services/auth'
 import { useToastStore } from '@/store/useToastStore'
@@ -42,8 +42,7 @@ export function LoginPage() {
 
     try {
       const user = await authService.login({ email: normalizedEmail, password })
-      const redirectPath = user.role === 'admin' ? '/dashboard' : '/purchases'
-      navigate(redirectPath, { replace: true })
+      navigate(user.email_verified_at ? '/dashboard' : '/verify-email', { replace: true })
     } catch (error: unknown) {
       const message = getApiErrorMessage(
         error,
@@ -70,7 +69,6 @@ export function LoginPage() {
           <div className="login-header__brand">
             <BrandMark />
           </div>
-          <ThemeSwitch />
         </header>
 
         <main className="login-main">
@@ -106,12 +104,11 @@ export function LoginPage() {
               </div>
 
               <div className="form-group">
-                <input
+                <PasswordField
                   id="password"
                   autoComplete="current-password"
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder="Senha"
-                  type="password"
                   value={password}
                   className="simple-input"
                 />
