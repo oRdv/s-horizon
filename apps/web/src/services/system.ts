@@ -7,6 +7,7 @@ import type {
   DashboardResponse,
   MasterDashboard,
   PaymentTransaction,
+  ServiceOrder,
   StaffDashboard,
   AdminTournamentRegistrationsResponse,
   TournamentRegistration,
@@ -144,8 +145,9 @@ export const systemService = {
     amount: number
     provider: 'stripe' | 'mercado_pago'
     method: 'pix' | 'card'
-  }): Promise<{ transaction: PaymentTransaction }> {
-    const response = await apiClient.post<DashboardResponse<{ transaction: PaymentTransaction }>>(
+    metadata?: Record<string, unknown>
+  }): Promise<{ transaction: PaymentTransaction; order: ServiceOrder }> {
+    const response = await apiClient.post<DashboardResponse<{ transaction: PaymentTransaction; order: ServiceOrder }>>(
       '/payments/customer',
       payload,
     )

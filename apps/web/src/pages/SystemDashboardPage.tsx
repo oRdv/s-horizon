@@ -271,9 +271,9 @@ function CustomerDashboardView({ dashboard }: { dashboard: CustomerDashboard }) 
               ))
             ) : (
               <>
-                <p>Você ainda não tem pedidos. Escolha um plano na tabela de preços para abrir o primeiro.</p>
+                <p>Você ainda não tem pedidos. A tabela de preços completa fica na área de compras.</p>
                 <Link className="primary-button" to="/purchases">
-                  Ver tabela de preços
+                  Abrir tabela completa
                 </Link>
               </>
             )}

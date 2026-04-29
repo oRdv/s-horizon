@@ -29,27 +29,27 @@ enum Permission: string
     public function label(): string
     {
         return match ($this) {
-            self::ViewAllUsers => 'Visualizar todos os usuários',
-            self::ViewUsersByRole => 'Visualizar usuários por perfil',
-            self::ManageUsers => 'Cadastrar e editar usuários',
-            self::ActivateUsers => 'Ativar e desativar usuários',
-            self::ManageStaffPermissions => 'Gerenciar permissões de staffs',
+            self::ViewAllUsers => 'Visualizar todos os usuarios',
+            self::ViewUsersByRole => 'Visualizar usuarios por perfil',
+            self::ManageUsers => 'Cadastrar e editar usuarios',
+            self::ActivateUsers => 'Ativar e desativar usuarios',
+            self::ManageStaffPermissions => 'Gerenciar permissoes de staffs',
             self::ViewBoosters => 'Visualizar boosters',
             self::CreateBoosters => 'Cadastrar boosters',
             self::ViewBoosterProgress => 'Visualizar progresso dos boosters',
-            self::ViewOperationOrders => 'Acompanhar pedidos da operação',
+            self::ViewOperationOrders => 'Acompanhar pedidos da operacao',
             self::ViewCustomerPurchases => 'Visualizar compras de clientes',
-            self::ViewTournamentRegistrations => 'Visualizar inscriÃ§Ãµes de campeonatos',
+            self::ViewTournamentRegistrations => 'Visualizar inscricoes de campeonatos',
             self::CreateCustomerPayments => 'Criar pagamentos de clientes',
-            self::ViewPaymentHistory => 'Visualizar histórico financeiro',
+            self::ViewPaymentHistory => 'Visualizar historico financeiro',
             self::ViewBoosterPayments => 'Acessar pagamentos de boosters',
             self::ViewFinancialControl => 'Acessar controle financeiro',
             self::ManageWithdrawals => 'Aprovar ou rejeitar retiradas',
             self::RequestWithdrawals => 'Solicitar retirada',
             self::ViewGlobalGoals => 'Visualizar metas globais',
             self::ViewBoosterGoals => 'Visualizar metas individuais dos boosters',
-            self::ManageOwnProfile => 'Gerenciar próprio perfil',
-            self::ManageOwnSecurity => 'Gerenciar segurança da própria conta',
+            self::ManageOwnProfile => 'Gerenciar proprio perfil',
+            self::ManageOwnSecurity => 'Gerenciar seguranca da propria conta',
         };
     }
 }

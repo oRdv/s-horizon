@@ -157,7 +157,6 @@ function App() {
           }
           path="/tournaments"
         />
-
       </Routes>
       <ToastViewport />
     </>

@@ -29,7 +29,22 @@ class DashboardController extends Controller
                     'total_revenue' => (float) PaymentTransaction::query()->where('status', PaymentStatus::Paid->value)->sum('amount'),
                     'pending_withdrawals' => WithdrawalRequest::query()->where('status', WithdrawalStatus::Pending->value)->count(),
                 ],
-                'global_goals' => [],
+                'global_goals' => [
+                    'meta_faturamento_mes' => 18000,
+                    'faturamento_atual_mes' => (float) PaymentTransaction::query()
+                        ->where('status', PaymentStatus::Paid->value)
+                        ->whereMonth('created_at', now()->month)
+                        ->sum('amount'),
+                    'meta_pedidos_mes' => 55,
+                    'pedidos_abertos_mes' => ServiceOrder::query()
+                        ->whereMonth('created_at', now()->month)
+                        ->count(),
+                    'meta_boosters_ativos' => 12,
+                    'boosters_ativos' => User::query()
+                        ->where('role', UserRole::Booster->value)
+                        ->where('is_active', true)
+                        ->count(),
+                ],
                 'users_by_role' => User::query()
                     ->selectRaw('role, count(*) as total')
                     ->groupBy('role')
@@ -90,6 +105,11 @@ class DashboardController extends Controller
     {
         /** @var User $user */
         $user = $request->user();
+        $availableEarnings = (float) PaymentTransaction::query()
+            ->where('user_id', $user->getKey())
+            ->whereIn('direction', ['booster_earning', 'booster_bonus'])
+            ->where('status', PaymentStatus::Paid->value)
+            ->sum('amount');
 
         return response()->json([
             'data' => [
@@ -108,7 +128,7 @@ class DashboardController extends Controller
                         ->count(),
                 ],
                 'earnings' => [
-                    'available' => 0,
+                    'available' => $availableEarnings,
                     'pending_withdrawals' => (float) WithdrawalRequest::query()
                         ->where('booster_id', $user->getKey())
                         ->where('status', WithdrawalStatus::Pending->value)

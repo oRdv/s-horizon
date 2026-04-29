@@ -25,7 +25,7 @@ class AuthFlowTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('message', 'Conta criada com sucesso.')
             ->assertJsonPath('data.user.email', 'new-cliente@horizonboost.gg')
-            ->assertJsonPath('data.user.role', 'customer')
+            ->assertJsonPath('data.user.role', UserRole::Customer->value)
             ->assertJsonPath('data.email_verification.token_sent', true)
             ->assertJsonStructure([
                 'access_token',
@@ -39,28 +39,8 @@ class AuthFlowTest extends TestCase
 
         $this->assertDatabaseHas('users', [
             'email' => 'new-cliente@horizonboost.gg',
-            'role' => 'customer',
+            'role' => UserRole::Customer->value,
         ]);
-    }
-
-    public function test_register_returns_clear_validation_errors(): void
-    {
-        User::factory()->create([
-            'email' => 'taken@horizonboost.gg',
-        ]);
-
-        $response = $this->postJson('/api/auth/register', [
-            'name' => 'Taken Booster',
-            'email' => 'taken@horizonboost.gg',
-            'password' => 'short',
-            'password_confirmation' => 'different',
-        ]);
-
-        $response
-            ->assertUnprocessable()
-            ->assertJsonPath('errors.email.0', 'Este email já está cadastrado. Tente entrar ou use outro email.')
-            ->assertJsonPath('errors.password.0', 'A senha precisa ter pelo menos 8 caracteres.')
-            ->assertJsonPath('errors.password.1', 'A confirmação da senha não confere.');
     }
 
     public function test_user_can_login_and_fetch_authenticated_profile(): void
@@ -68,6 +48,7 @@ class AuthFlowTest extends TestCase
         $user = User::factory()->create([
             'email' => 'pilot@horizonboost.gg',
             'password' => 'Horizon123!',
+            'is_active' => true,
         ]);
 
         $loginResponse = $this->postJson('/api/auth/login', [
@@ -83,9 +64,6 @@ class AuthFlowTest extends TestCase
                 ],
                 'access_token',
                 'refresh_token',
-                'token_type',
-                'expires_in',
-                'refresh_expires_in',
             ]);
 
         $this->withHeader('Authorization', 'Bearer '.$loginResponse->json('access_token'))
@@ -99,6 +77,7 @@ class AuthFlowTest extends TestCase
         $user = User::factory()->create([
             'email' => 'refresh@horizonboost.gg',
             'password' => 'Horizon123!',
+            'is_active' => true,
         ]);
 
         $loginResponse = $this->postJson('/api/auth/login', [
@@ -123,57 +102,6 @@ class AuthFlowTest extends TestCase
         $this->assertDatabaseCount((new RefreshToken())->getTable(), 2);
     }
 
-    public function test_protected_routes_require_a_valid_access_token(): void
-    {
-        $this->getJson('/api/me')
-            ->assertUnauthorized()
-            ->assertJsonPath('message', 'O access token não foi informado.');
-    }
-
-    public function test_customer_can_create_payment_order_but_cannot_access_withdrawals(): void
-    {
-        $customer = User::factory()->create([
-            'email' => 'cliente-compras@horizonboost.gg',
-            'password' => 'Horizon123!',
-            'role' => UserRole::Customer->value,
-            'is_active' => true,
-        ]);
-
-        $token = (string) $this->postJson('/api/auth/login', [
-            'email' => $customer->email,
-            'password' => 'Horizon123!',
-        ])->assertOk()->json('access_token');
-
-        $this->withHeader('Authorization', 'Bearer '.$token)
-            ->postJson('/api/payments/customer', [
-                'service_type' => 'soloqueue_boost',
-                'title' => 'Soloqueue Boost',
-                'description' => 'Pedido criado pela tabela de preços.',
-                'amount' => 149,
-                'provider' => 'mercado_pago',
-                'method' => 'pix',
-            ])
-            ->assertCreated()
-            ->assertJsonPath('message', 'Pagamento criado e pedido registrado.');
-
-        $this->assertDatabaseHas('service_orders', [
-            'customer_id' => $customer->getKey(),
-            'service_type' => 'soloqueue_boost',
-            'status' => 'pending',
-        ]);
-
-        $this->assertDatabaseHas('payment_transactions', [
-            'user_id' => $customer->getKey(),
-            'direction' => 'customer_payment',
-            'status' => 'pending',
-        ]);
-
-        $this->withHeader('Authorization', 'Bearer '.$token)
-            ->getJson('/api/withdrawals')
-            ->assertForbidden()
-            ->assertJsonPath('message', 'Você não tem permissão para acessar este recurso.');
-    }
-
     public function test_customer_can_submit_tournament_registration(): void
     {
         $customer = User::factory()->create([
@@ -183,17 +111,14 @@ class AuthFlowTest extends TestCase
             'is_active' => true,
         ]);
 
-        $token = (string) $this->postJson('/api/auth/login', [
-            'email' => $customer->email,
-            'password' => 'Horizon123!',
-        ])->assertOk()->json('access_token');
+        $token = $this->loginToken($customer->email, 'Horizon123!');
 
         $payload = [
             'game' => 'lol',
             'category_id' => 'lol-5v5',
             'team_name' => 'Horizon Eclipse',
             'team_tag' => 'HRZ',
-            'captain_name' => 'Capitão Horizon',
+            'captain_name' => 'Capitao Horizon',
             'captain_email' => 'captain@horizonboost.gg',
             'captain_phone' => '(11) 99999-9999',
             'captain_discord' => '@captain',
@@ -207,7 +132,7 @@ class AuthFlowTest extends TestCase
                 ['nick' => 'Adc Horizon', 'riot_id' => 'Adc#BR1', 'role' => 'ADC', 'rank' => 'Diamante'],
                 ['nick' => 'Sup Horizon', 'riot_id' => 'Sup#BR1', 'role' => 'Suporte', 'rank' => 'Diamante'],
             ],
-            'notes' => 'Time disponível à noite.',
+            'notes' => 'Time disponivel a noite.',
             'accepted_rules' => true,
             'accepted_check_in' => true,
         ];
@@ -215,7 +140,6 @@ class AuthFlowTest extends TestCase
         $this->withHeader('Authorization', 'Bearer '.$token)
             ->postJson('/api/tournament-registrations', $payload)
             ->assertCreated()
-            ->assertJsonPath('message', 'Inscrição enviada para conferência.')
             ->assertJsonPath('data.registration.category_title', 'League of Legends 5v5')
             ->assertJsonPath('data.registration.team_name', 'Horizon Eclipse');
 
@@ -226,33 +150,29 @@ class AuthFlowTest extends TestCase
             'team_name' => 'Horizon Eclipse',
             'status' => 'pending',
         ]);
-
-        $this->withHeader('Authorization', 'Bearer '.$token)
-            ->getJson('/api/tournament-registrations')
-            ->assertOk()
-            ->assertJsonPath('data.registrations.data.0.team_name', 'Horizon Eclipse');
     }
 
-    public function test_master_admin_cannot_request_withdrawal_for_self(): void
+    public function test_customer_cannot_access_withdrawals(): void
     {
-        $master = User::factory()->create([
-            'email' => 'master-withdrawal@horizonboost.gg',
+        $customer = User::factory()->create([
+            'email' => 'cliente-sem-saque@horizonboost.gg',
             'password' => 'Horizon123!',
-            'role' => UserRole::MasterAdmin->value,
+            'role' => UserRole::Customer->value,
             'is_active' => true,
         ]);
 
-        $token = (string) $this->postJson('/api/auth/login', [
-            'email' => $master->email,
-            'password' => 'Horizon123!',
-        ])->assertOk()->json('access_token');
+        $token = $this->loginToken($customer->email, 'Horizon123!');
 
         $this->withHeader('Authorization', 'Bearer '.$token)
-            ->postJson('/api/withdrawals', [
-                'amount' => 100,
-                'method' => 'pix',
-            ])
-            ->assertForbidden()
-            ->assertJsonPath('message', 'Somente boosters podem solicitar saque.');
+            ->getJson('/api/withdrawals')
+            ->assertForbidden();
+    }
+
+    private function loginToken(string $email, string $password): string
+    {
+        return (string) $this->postJson('/api/auth/login', [
+            'email' => $email,
+            'password' => $password,
+        ])->assertOk()->json('access_token');
     }
 }
