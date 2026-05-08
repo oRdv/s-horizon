@@ -234,6 +234,20 @@ const routeOptionsByGame: Record<GameKey, string[]> = {
   tft: [],
 }
 
+const rankEmblems: Record<RankTier, string> = {
+  iron: '/ranks/iron.png',
+  bronze: '/ranks/bronze.png',
+  silver: '/ranks/silver.png',
+  gold: '/ranks/gold.png',
+  platinum: '/ranks/platinum.png',
+  emerald: '/ranks/emerald.png',
+  diamond: '/ranks/diamond.png',
+  master: '/ranks/master.png',
+  grandmaster: '/ranks/grandmaster.png',
+  challenger: '/ranks/challenger.png',
+  sovereign: '/ranks/challenger.png',
+}
+
 const maxSpecificChampions = 10
 const superRestrictionChampionLimit = 3
 
@@ -1356,6 +1370,9 @@ export function PricingBuilder({
                 </div>
 
                 <div className="pricing-selection-banner">
+                  {isDivisionMode ? (
+                    <img alt="" className="pricing-selection-banner__emblem" src={rankEmblems[currentTier]} />
+                  ) : null}
                   <span>{isDivisionMode ? 'Seleção atual' : `${gameMeta.shortLabel} base`}</span>
                   <strong>{isDivisionMode ? formatTierDivision(currentTier, currentDivision) : currentRow.label}</strong>
                   <small>{isDivisionMode ? formatTierSubtitle(currentTier, currentDivision) : 'Faixa usada no calculo'}</small>
@@ -1379,6 +1396,7 @@ export function PricingBuilder({
                         }}
                         type="button"
                       >
+                        <img alt="" className="pricing-tier-pill__emblem" src={rankEmblems[tier]} />
                         <span>{row.shortLabel}</span>
                         <strong>{row.label}</strong>
                       </button>
@@ -1423,6 +1441,9 @@ export function PricingBuilder({
                 </div>
 
                 <div className="pricing-selection-banner">
+                  {isDivisionMode ? (
+                    <img alt="" className="pricing-selection-banner__emblem" src={rankEmblems[targetTier]} />
+                  ) : null}
                   <span>{isDivisionMode ? 'Destino escolhido' : 'Resumo da quantidade'}</span>
                   <strong>{isDivisionMode ? formatTierDivision(targetTier, targetDivision) : modeMeta.label}</strong>
                   <small>{isDivisionMode ? formatTierSubtitle(targetTier, targetDivision) : quote?.summary ?? 'Quantidade ativa'}</small>
@@ -1441,6 +1462,7 @@ export function PricingBuilder({
                             onClick={() => handleTargetTierSelect(tier)}
                             type="button"
                           >
+                            <img alt="" className="pricing-tier-pill__emblem" src={rankEmblems[tier]} />
                             <span>{row.shortLabel}</span>
                             <strong>{row.label}</strong>
                           </button>

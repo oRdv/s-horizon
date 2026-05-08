@@ -106,11 +106,12 @@ export function PurchasesPage() {
           </div>
         </section>
 
-        <section className="purchase-section" id="tabela-precos">
+        <section className="purchase-section" id="novo-pedido">
           <PricingBuilder
-            description="Escolha o formato, ajuste o elo atual e o destino final. A Horizon recalcula tudo na hora com os tiers atuais do LoL."
-            eyebrow="Tabela de preços"
+            description="Escolha o formato, ajuste o elo atual e o destino final. O valor aparece no resumo antes de você fechar."
+            eyebrow="Novo pedido"
             onOrderCreated={handleOrderCreated}
+            showReferenceTable={false}
             title="Escolha o serviço e monte sua rota"
           />
         </section>
@@ -132,7 +133,7 @@ export function PurchasesPage() {
             <div className="empty-state">
               <ShoppingCart size={64} />
               <h3>Nenhum pedido ainda</h3>
-              <p>Escolha um serviço na tabela para criar seu primeiro pedido como cliente.</p>
+              <p>Monte seu primeiro pedido acima para acompanhar tudo por aqui.</p>
             </div>
           ) : (
             <div className="purchases-list">
