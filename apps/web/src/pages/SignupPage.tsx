@@ -44,13 +44,13 @@ export function SignupPage() {
     }
 
     if (!normalizedEmail) {
-      showSignupError('Email obrigatório', 'Informe seu email.')
+      showSignupError('E-mail obrigatório', 'Informe seu e-mail.')
       setIsSubmitting(false)
       return
     }
 
     if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
-      showSignupError('Email inválido', 'Digite um email válido.')
+      showSignupError('E-mail inválido', 'Digite um e-mail válido.')
       setIsSubmitting(false)
       return
     }
@@ -161,7 +161,7 @@ export function SignupPage() {
                   id="email"
                   autoComplete="email"
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="Email"
+                  placeholder="E-mail"
                   type="email"
                   value={email}
                   className="simple-input"

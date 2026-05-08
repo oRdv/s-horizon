@@ -222,7 +222,7 @@ export function AdminUsersPage() {
       addToast({
         tone: 'error',
         title: 'Dados incompletos',
-        description: 'Informe nome e email antes de salvar o cadastro.',
+        description: 'Informe nome e e-mail antes de salvar o cadastro.',
       })
       return
     }
@@ -563,7 +563,7 @@ export function AdminUsersPage() {
             />
             <input
               onChange={(event) => setForm({ ...form, email: event.target.value })}
-              placeholder="Email"
+              placeholder="E-mail"
               required
               type="email"
               value={form.email}
@@ -765,7 +765,7 @@ export function AdminUsersPage() {
           <div className="data-table">
             <div className="data-table__row data-table__row--head">
               <span>Nome</span>
-              <span>Email</span>
+                  <span>E-mail</span>
               <span>Perfil</span>
               <span>Status</span>
               <span>Ações</span>

@@ -277,7 +277,7 @@ function TournamentDetailsModal({
             <strong>{registration.user?.name ?? 'Cliente não carregado'}</strong>
             <small>ID #{registration.user?.id ?? registration.user_id}</small>
             <small>{registration.user?.email ?? registration.captain_email}</small>
-            <small>{registration.user?.email_verified_at ? 'Email verificado' : 'Email não verificado'}</small>
+            <small>{registration.user?.email_verified_at ? 'E-mail verificado' : 'E-mail não verificado'}</small>
           </article>
 
           <article>

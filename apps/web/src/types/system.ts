@@ -19,6 +19,7 @@ export interface ServiceOrder {
   status: string
   price: string
   currency: string
+  metadata?: Record<string, unknown> | null
   customer?: AuthUser | null
   booster?: AuthUser | null
 }
@@ -33,6 +34,25 @@ export interface PaymentTransaction {
   status: string
   provider_reference?: string | null
   service_order?: ServiceOrder | null
+}
+
+export interface PaymentGatewayData {
+  type: 'pix' | 'card'
+  mock?: boolean
+  amount?: string
+  currency?: string
+  expires_at?: string | null
+  pix_copy_paste?: string | null
+  qr_code_payload?: string | null
+  merchant_name?: string | null
+}
+
+export interface PaymentGatewayPayload {
+  provider: 'stripe' | 'mercado_pago' | 'manual'
+  provider_reference?: string | null
+  checkout_url?: string | null
+  message?: string | null
+  payment_data?: PaymentGatewayData | null
 }
 
 export interface WithdrawalRequest {
@@ -105,12 +125,27 @@ export interface BoosterApplication extends BoosterProfile {
   user?: AuthUser | null
 }
 
+export interface LandingBooster {
+  id: number
+  user_id?: number | null
+  nick: string
+  champion_name: string
+  rank_label: string
+  rank_key: 'iron' | 'bronze' | 'silver' | 'gold' | 'platinum' | 'emerald' | 'diamond' | 'master' | 'grandmaster' | 'challenger'
+  game: string
+  sort_order: number
+  is_active: boolean
+  user?: AuthUser | null
+}
+
 export interface MasterDashboard {
   summary: Record<string, number>
   global_goals: Record<string, number>
   users_by_role: Partial<Record<UserRole, number>>
   latest_users: AuthUser[]
   pending_withdrawal_requests: WithdrawalRequest[]
+  landing_boosters: LandingBooster[]
+  booster_users: AuthUser[]
 }
 
 export interface StaffDashboard {
@@ -131,6 +166,7 @@ export interface StaffDashboard {
 }
 
 export interface BoosterDashboard {
+  available_orders: ServiceOrder[]
   assigned_orders: ServiceOrder[]
   progress: {
     completed_orders: number

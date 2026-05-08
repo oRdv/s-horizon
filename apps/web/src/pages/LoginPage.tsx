@@ -35,7 +35,7 @@ export function LoginPage() {
     const normalizedEmail = email.trim()
 
     if (!normalizedEmail || !password) {
-      showLoginError('Dados incompletos', 'Informe email e senha para entrar.')
+      showLoginError('Dados incompletos', 'Informe e-mail e senha para entrar.')
       setIsSubmitting(false)
       return
     }
@@ -46,7 +46,7 @@ export function LoginPage() {
     } catch (error: unknown) {
       const message = getApiErrorMessage(
         error,
-        'Não foi possível autenticar. Confira email e senha.',
+        'Não foi possível autenticar. Confira e-mail e senha.',
       )
 
       showLoginError('Login não concluído', message)
@@ -96,7 +96,7 @@ export function LoginPage() {
                   id="email"
                   autoComplete="email"
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="Email"
+                  placeholder="E-mail"
                   type="email"
                   value={email}
                   className="simple-input"

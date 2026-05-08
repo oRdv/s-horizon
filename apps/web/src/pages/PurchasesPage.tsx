@@ -66,8 +66,8 @@ export function PurchasesPage() {
         if (active) {
           addToast({
             tone: 'error',
-            title: 'Historico indisponivel',
-            description: getApiErrorMessage(error, 'Nao foi possivel carregar seus pedidos agora.'),
+            title: 'Histórico indisponível',
+            description: getApiErrorMessage(error, 'Não foi possível carregar seus pedidos agora.'),
           })
         }
       } finally {
@@ -109,15 +109,15 @@ export function PurchasesPage() {
         <section className="purchase-section" id="tabela-precos">
           <PricingBuilder
             description="Escolha o formato, ajuste o elo atual e o destino final. A Horizon recalcula tudo na hora com os tiers atuais do LoL."
-            eyebrow="Tabela de precos"
+            eyebrow="Tabela de preços"
             onOrderCreated={handleOrderCreated}
-            title="Escolha o servico e monte sua rota"
+            title="Escolha o serviço e monte sua rota"
           />
         </section>
 
         <section className="purchase-section purchases-content" id="meus-pedidos">
           <div className="section-heading">
-            <span className="panel__eyebrow">Historico do cliente</span>
+            <span className="panel__eyebrow">Histórico do cliente</span>
             <h2>Meus pedidos</h2>
             <p>Pedidos criados pela calculadora aparecem aqui com valor, metodo e status.</p>
           </div>
@@ -126,13 +126,13 @@ export function PurchasesPage() {
             <div className="empty-state">
               <Loader2 className="spin-icon" size={46} />
               <h3>Carregando pedidos</h3>
-              <p>Estamos buscando seu historico de compras.</p>
+              <p>Estamos buscando seu histórico de compras.</p>
             </div>
           ) : payments.length === 0 ? (
             <div className="empty-state">
               <ShoppingCart size={64} />
               <h3>Nenhum pedido ainda</h3>
-              <p>Escolha um servico na tabela para criar seu primeiro pedido como cliente.</p>
+              <p>Escolha um serviço na tabela para criar seu primeiro pedido como cliente.</p>
             </div>
           ) : (
             <div className="purchases-list">

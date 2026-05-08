@@ -8,6 +8,7 @@ use App\Enums\UserRole;
 use App\Enums\WithdrawalStatus;
 use App\Http\Controllers\Controller;
 use App\Models\PaymentTransaction;
+use App\Models\LandingBooster;
 use App\Models\ServiceOrder;
 use App\Models\User;
 use App\Models\WithdrawalRequest;
@@ -56,6 +57,15 @@ class DashboardController extends Controller
                     ->latest()
                     ->limit(8)
                     ->get(),
+                'landing_boosters' => LandingBooster::query()
+                    ->with('user:id,name,email,role')
+                    ->orderBy('sort_order')
+                    ->orderBy('id')
+                    ->get(),
+                'booster_users' => User::query()
+                    ->where('role', UserRole::Booster->value)
+                    ->orderBy('name')
+                    ->get(['id', 'name', 'email', 'role']),
             ],
         ]);
     }
@@ -110,10 +120,25 @@ class DashboardController extends Controller
             ->whereIn('direction', ['booster_earning', 'booster_bonus'])
             ->where('status', PaymentStatus::Paid->value)
             ->sum('amount');
+        $availableOrders = ServiceOrder::query()
+            ->with(['customer:id,name,email,role'])
+            ->whereNull('booster_id')
+            ->whereIn('status', [
+                ServiceOrderStatus::Pending->value,
+                ServiceOrderStatus::Paid->value,
+            ])
+            ->latest()
+            ->limit(40)
+            ->get()
+            ->filter(fn (ServiceOrder $order): bool => blank(data_get($order->metadata ?? [], 'addons.favorite_booster')))
+            ->values()
+            ->take(12);
 
         return response()->json([
             'data' => [
+                'available_orders' => $availableOrders,
                 'assigned_orders' => ServiceOrder::query()
+                    ->with(['customer:id,name,email,role'])
                     ->where('booster_id', $user->getKey())
                     ->latest()
                     ->get(),

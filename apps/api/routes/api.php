@@ -3,10 +3,12 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BoosterApplicationController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\LandingBoosterController;
 use App\Http\Controllers\Api\MatchReportController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\SecurityController;
+use App\Http\Controllers\Api\ServiceOrderController;
 use App\Http\Controllers\Api\TournamentRegistrationController;
 use App\Http\Controllers\Api\UserManagementController;
 use App\Http\Controllers\Api\WithdrawalRequestController;
@@ -20,6 +22,7 @@ Route::prefix('auth')->group(function (): void {
 });
 
 Route::post('/booster-applications/public', [BoosterApplicationController::class, 'publicStore']);
+Route::get('/landing/boosters', [LandingBoosterController::class, 'publicIndex']);
 
 Route::middleware('auth.jwt')->group(function (): void {
     Route::get('/me', [AuthController::class, 'me']);
@@ -59,6 +62,14 @@ Route::middleware('auth.jwt')->group(function (): void {
             ->middleware('permission:users.manage');
         Route::patch('/booster-applications/{boosterApplication}/reject', [BoosterApplicationController::class, 'reject'])
             ->middleware('permission:users.manage');
+
+        Route::get('/landing-boosters', [LandingBoosterController::class, 'index']);
+        Route::post('/landing-boosters', [LandingBoosterController::class, 'store'])
+            ->middleware('permission:users.manage');
+        Route::patch('/landing-boosters/{landingBooster}', [LandingBoosterController::class, 'update'])
+            ->middleware('permission:users.manage');
+        Route::delete('/landing-boosters/{landingBooster}', [LandingBoosterController::class, 'destroy'])
+            ->middleware('permission:users.manage');
     });
 
     Route::prefix('admin/tournament-registrations')
@@ -86,6 +97,10 @@ Route::middleware('auth.jwt')->group(function (): void {
         Route::get('/', [PaymentController::class, 'index']);
         Route::post('/customer', [PaymentController::class, 'createCustomerPayment'])
             ->middleware('permission:payments.customer.create');
+    });
+
+    Route::prefix('orders')->middleware('role:booster')->group(function (): void {
+        Route::post('/{serviceOrder}/claim', [ServiceOrderController::class, 'claim']);
     });
 
     Route::prefix('tournament-registrations')->middleware('role:customer')->group(function (): void {

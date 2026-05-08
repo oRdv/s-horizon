@@ -6,7 +6,9 @@ import type {
   CustomerDashboard,
   DashboardResponse,
   MasterDashboard,
+  LandingBooster,
   PaymentTransaction,
+  PaymentGatewayPayload,
   ServiceOrder,
   StaffDashboard,
   AdminTournamentRegistrationsResponse,
@@ -25,11 +27,46 @@ const dashboardEndpointByRole: Record<UserRole, string> = {
 
 export type RoleDashboard = MasterDashboard | StaffDashboard | BoosterDashboard | CustomerDashboard
 
+export type LandingBoosterPayload = Omit<LandingBooster, 'id' | 'user'>
+
 export const systemService = {
   async getDashboard(role: UserRole): Promise<RoleDashboard> {
     const response = await apiClient.get<DashboardResponse<RoleDashboard>>(dashboardEndpointByRole[role])
 
     return response.data.data
+  },
+
+  async getPublicLandingBoosters(): Promise<LandingBooster[]> {
+    const response = await apiClient.get<DashboardResponse<{ boosters: LandingBooster[] }>>('/landing/boosters')
+
+    return response.data.data.boosters
+  },
+
+  async getAdminLandingBoosters(): Promise<{ boosters: LandingBooster[]; booster_users: AuthUser[] }> {
+    const response = await apiClient.get<DashboardResponse<{ boosters: LandingBooster[]; booster_users: AuthUser[] }>>(
+      '/admin/landing-boosters',
+    )
+
+    return response.data.data
+  },
+
+  async createLandingBooster(payload: LandingBoosterPayload): Promise<LandingBooster> {
+    const response = await apiClient.post<DashboardResponse<{ booster: LandingBooster }>>('/admin/landing-boosters', payload)
+
+    return response.data.data.booster
+  },
+
+  async updateLandingBooster(id: number, payload: LandingBoosterPayload): Promise<LandingBooster> {
+    const response = await apiClient.patch<DashboardResponse<{ booster: LandingBooster }>>(
+      `/admin/landing-boosters/${id}`,
+      payload,
+    )
+
+    return response.data.data.booster
+  },
+
+  async deleteLandingBooster(id: number): Promise<void> {
+    await apiClient.delete(`/admin/landing-boosters/${id}`)
   },
 
   async getUsers(role?: string): Promise<UsersResponse> {
@@ -146,13 +183,18 @@ export const systemService = {
     provider: 'stripe' | 'mercado_pago'
     method: 'pix' | 'card'
     metadata?: Record<string, unknown>
-  }): Promise<{ transaction: PaymentTransaction; order: ServiceOrder }> {
-    const response = await apiClient.post<DashboardResponse<{ transaction: PaymentTransaction; order: ServiceOrder }>>(
-      '/payments/customer',
-      payload,
-    )
+  }): Promise<{ transaction: PaymentTransaction; order: ServiceOrder; gateway: PaymentGatewayPayload }> {
+    const response = await apiClient.post<
+      DashboardResponse<{ transaction: PaymentTransaction; order: ServiceOrder; gateway: PaymentGatewayPayload }>
+    >('/payments/customer', payload)
 
     return response.data.data
+  },
+
+  async claimBoosterOrder(orderId: number): Promise<ServiceOrder> {
+    const response = await apiClient.post<DashboardResponse<{ order: ServiceOrder }>>(`/orders/${orderId}/claim`)
+
+    return response.data.data.order
   },
 
   async getWithdrawals(): Promise<WithdrawalRequest[]> {

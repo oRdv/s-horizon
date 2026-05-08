@@ -212,8 +212,8 @@ export function ProfilePage() {
         <section className="system-grid-two">
           <article className="management-panel panel">
             <MailCheck size={22} />
-            <h2>Verificação por email</h2>
-            <p>{user?.email_verified_at ? 'Email verificado.' : 'Email ainda não verificado.'}</p>
+            <h2>Verificação por e-mail</h2>
+            <p>{user?.email_verified_at ? 'E-mail verificado.' : 'E-mail ainda não verificado.'}</p>
             <button className="ghost-button" onClick={() => void handleEmailVerification()} type="button">
               Enviar código de verificação
             </button>
@@ -224,7 +224,7 @@ export function ProfilePage() {
             <h2>Autenticação em duas etapas</h2>
             <p>{user?.two_factor_enabled ? '2FA ativa.' : '2FA ainda não ativada.'}</p>
             <button className="ghost-button" onClick={() => void handleTwoFactor()} type="button">
-              Ativar 2FA por email
+              Ativar 2FA por e-mail
             </button>
           </article>
         </section>
@@ -244,7 +244,7 @@ export function ProfilePage() {
             }}
           >
             <span className="panel__eyebrow">Confirmação pendente</span>
-            <h2>Digite o código enviado por email</h2>
+            <h2>Digite o código enviado por e-mail</h2>
             <div className="inline-form">
               <input
                 inputMode="numeric"

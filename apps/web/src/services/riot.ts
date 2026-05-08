@@ -1,5 +1,6 @@
 export interface LolChampionOption {
   id: string
+  iconUrl: string
   key: string
   name: string
 }
@@ -9,6 +10,9 @@ interface RiotChampionPayload {
     string,
     {
       id: string
+      image: {
+        full: string
+      }
       key: string
       name: string
     }
@@ -22,7 +26,7 @@ async function fetchLatestDataDragonVersion() {
   const response = await fetch('https://ddragon.leagueoflegends.com/api/versions.json')
 
   if (!response.ok) {
-    throw new Error('Nao foi possivel carregar a versao do Data Dragon.')
+    throw new Error('Não foi possível carregar a versão do Data Dragon.')
   }
 
   const versions = (await response.json()) as string[]
@@ -38,7 +42,7 @@ async function fetchChampionPayload(version: string) {
   const response = await fetch(`https://ddragon.leagueoflegends.com/cdn/${version}/data/pt_BR/champion.json`)
 
   if (!response.ok) {
-    throw new Error('Nao foi possivel carregar a lista oficial de campeoes.')
+    throw new Error('Não foi possível carregar a lista oficial de campeões.')
   }
 
   return (await response.json()) as RiotChampionPayload
@@ -57,6 +61,7 @@ export async function getLolChampionOptions() {
       const champions = Object.values(payload.data)
         .map((champion) => ({
           id: champion.id,
+          iconUrl: `https://ddragon.leagueoflegends.com/cdn/${version}/img/champion/${champion.image.full}`,
           key: champion.key,
           name: champion.name,
         }))

@@ -38,6 +38,7 @@ export interface BoostQuote {
   maxTotal: number
   suggestedTotal: number
   divisionCount: number
+  estimatedDays: number
   summary: string
   ladderText: string
 }
@@ -357,6 +358,7 @@ export function createBoostQuote(input: {
     maxTotal,
     suggestedTotal: roundSuggested(minTotal, maxTotal),
     divisionCount,
+    estimatedDays: divisionCount + 1,
     summary: `${divisionCount} ${unitLabel} no ${input.mode === 'solo' ? 'solo boost' : 'duo boost'}`,
     ladderText,
   }

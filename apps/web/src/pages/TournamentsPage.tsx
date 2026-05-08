@@ -265,7 +265,7 @@ export function TournamentsPage() {
     }
 
     if (!form.captainName.trim() || !form.captainEmail.trim() || !form.captainDiscord.trim()) {
-      return 'Preencha nome, email e Discord do capitão.'
+      return 'Preencha nome, e-mail e Discord do capitão.'
     }
 
     if (missingPlayer) {
@@ -339,7 +339,7 @@ export function TournamentsPage() {
       addToast({
         tone: 'success',
         title: 'Inscrição enviada',
-        description: 'Seu time entrou na fila de conferência. A Horizon vai usar o email e Discord do capitão.',
+        description: 'Seu time entrou na fila de conferência. A Horizon vai usar o e-mail e o Discord do capitão.',
       })
     } catch (error: unknown) {
       addToast({
@@ -466,7 +466,7 @@ export function TournamentsPage() {
                 </label>
 
                 <label className="field-with-helper">
-                  <span>Email do capitão</span>
+                  <span>E-mail do capitão</span>
                   <input
                     name="captainEmail"
                     onChange={handleInputChange}

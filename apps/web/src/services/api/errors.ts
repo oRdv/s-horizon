@@ -7,7 +7,7 @@ interface ValidationResponse {
 
 const friendlyFieldLabels: Record<string, string> = {
   name: 'nome',
-  email: 'email',
+  email: 'e-mail',
   password: 'senha',
   password_confirmation: 'confirmação de senha',
 }
@@ -25,9 +25,7 @@ export function getApiErrorMessages(error: unknown, fallback: string): string[] 
 
   if (data?.errors) {
     const messages = Object.entries(data.errors)
-      .flatMap(([field, values]) =>
-        values.map((value) => translateValidationMessage(field, value)),
-      )
+      .flatMap(([field, values]) => values.map((value) => translateValidationMessage(field, value)))
       .filter((message) => message.length > 0)
 
     if (messages.length > 0) {
@@ -44,7 +42,7 @@ export function getApiErrorMessages(error: unknown, fallback: string): string[] 
   }
 
   if (error.response?.status === 401) {
-    return ['Email ou senha inválidos. Confira os dados e tente novamente.']
+    return ['E-mail ou senha inválidos. Confira os dados e tente novamente.']
   }
 
   if (!error.response) {
@@ -62,23 +60,19 @@ function translateValidationMessage(field: string, message: string): string {
     normalized.includes('já está cadastrado') ||
     normalized.includes('ja esta cadastrado')
   ) {
-    return 'Este email já está cadastrado. Tente entrar ou use outro email.'
+    return 'Este e-mail já está cadastrado. Tente entrar ou use outro e-mail.'
   }
 
   if (normalized.includes('at least 8') || normalized.includes('pelo menos 8')) {
     return 'A senha precisa ter pelo menos 8 caracteres.'
   }
 
-  if (
-    normalized.includes('confirmation') ||
-    normalized.includes('confirmação') ||
-    normalized.includes('confirmacao')
-  ) {
+  if (normalized.includes('confirmation') || normalized.includes('confirmação') || normalized.includes('confirmacao')) {
     return 'A confirmação da senha não confere.'
   }
 
   if (normalized.includes('valid email') || normalized.includes('email valido')) {
-    return 'Digite um email valido.'
+    return 'Digite um e-mail válido.'
   }
 
   if (
@@ -112,7 +106,7 @@ function translateGenericMessage(message: string): string {
   }
 
   if (normalized.includes('credentials') || normalized.includes('credenciais')) {
-    return 'Email ou senha inválidos. Confira os dados e tente novamente.'
+    return 'E-mail ou senha inválidos. Confira os dados e tente novamente.'
   }
 
   return message
