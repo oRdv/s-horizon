@@ -11,18 +11,20 @@ import type { PaymentTransaction, WithdrawalRequest } from '@/types/system'
 import { hasPermission } from '@/utils/authz'
 
 function formatCurrency(value: number | string) {
+  const numeric = Number(value)
+
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
-  }).format(Number(value))
+  }).format(numeric > 999 ? numeric / 100 : numeric)
 }
 
 function formatProvider(provider: PaymentTransaction['provider']) {
-  if (provider === 'mercado_pago') {
+  if (provider === 'MERCADO_PAGO' || provider === 'mercado_pago') {
     return 'Mercado Pago'
   }
 
-  return provider === 'stripe' ? 'Stripe' : 'Manual'
+  return provider === 'STRIPE' || provider === 'stripe' ? 'Stripe' : 'Manual'
 }
 
 function formatMethod(method: PaymentTransaction['method']) {

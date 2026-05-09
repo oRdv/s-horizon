@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'customer_id',
@@ -17,6 +18,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'description',
     'status',
     'price',
+    'base_price',
+    'final_price',
+    'payment_method',
+    'payment_status',
     'currency',
     'metadata',
     'purchased_at',
@@ -29,6 +34,8 @@ class ServiceOrder extends Model
     {
         return [
             'price' => 'decimal:2',
+            'base_price' => 'integer',
+            'final_price' => 'integer',
             'metadata' => 'array',
             'purchased_at' => 'datetime',
             'started_at' => 'datetime',
@@ -61,6 +68,11 @@ class ServiceOrder extends Model
 
     public function payments(): HasMany
     {
-        return $this->hasMany(PaymentTransaction::class);
+        return $this->hasMany(Payment::class, 'order_id');
+    }
+
+    public function conversation(): HasOne
+    {
+        return $this->hasOne(OrderConversation::class);
     }
 }

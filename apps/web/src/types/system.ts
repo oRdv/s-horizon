@@ -18,27 +18,76 @@ export interface ServiceOrder {
   description?: string | null
   status: string
   price: string
+  base_price?: number | null
+  final_price?: number | null
+  payment_method?: PaymentMethod | null
+  payment_status?: string | null
   currency: string
   metadata?: Record<string, unknown> | null
   customer?: AuthUser | null
   booster?: AuthUser | null
+  created_at?: string
+  updated_at?: string
+  chat_available?: boolean
+  conversation_id?: number | null
+  latest_payment?: PaymentTransaction | null
+  payments?: PaymentTransaction[]
 }
+
+export type PaymentMethod = 'PIX' | 'CREDIT_CARD' | 'DEBIT_CARD'
+export type PaymentProvider = 'STRIPE' | 'MERCADO_PAGO'
 
 export interface PaymentTransaction {
   id: number
-  provider: 'stripe' | 'mercado_pago' | 'manual'
-  method: 'pix' | 'card'
-  direction: string
-  amount: string
+  orderId?: number
+  boostId?: number
+  provider: PaymentProvider | 'stripe' | 'mercado_pago' | 'manual'
+  method: PaymentMethod | 'pix' | 'card'
+  direction?: string
+  amount: number | string
+  baseAmount?: number
+  feeAmount?: number
+  discountAmount?: number
+  finalAmount?: number
   currency: string
   status: string
+  providerPaymentId?: string | null
+  providerPreferenceId?: string | null
+  providerSessionId?: string | null
+  paymentIntentId?: string | null
+  qrCode?: string | null
+  qrCodeBase64?: string | null
+  pixCopyPaste?: string | null
+  expiresAt?: string | null
   provider_reference?: string | null
   service_order?: ServiceOrder | null
 }
 
+export interface PaymentInstallment {
+  quantity: number
+  amount: number
+  total: number
+}
+
+export interface PaymentMethodOption {
+  method: PaymentMethod
+  provider: PaymentProvider
+  label: string
+  description: string
+  finalAmount: number
+  installments: PaymentInstallment[]
+  available: boolean
+  unavailableReason?: string | null
+}
+
+export interface PaymentMethodsResponse {
+  basePrice: number
+  currency: string
+  methods: PaymentMethodOption[]
+}
+
 export interface PaymentGatewayData {
   type: 'pix' | 'card'
-  mock?: boolean
   amount?: string
   currency?: string
   expires_at?: string | null
@@ -48,11 +97,43 @@ export interface PaymentGatewayData {
 }
 
 export interface PaymentGatewayPayload {
-  provider: 'stripe' | 'mercado_pago' | 'manual'
+  paymentId?: number
+  method?: PaymentMethod
+  provider?: PaymentProvider
+  clientSecret?: string | null
+  publishableKey?: string | null
+  qrCode?: string | null
+  qrCodeBase64?: string | null
+  pixCopyPaste?: string | null
+  expiresAt?: string | null
+  status?: string
   provider_reference?: string | null
-  checkout_url?: string | null
   message?: string | null
   payment_data?: PaymentGatewayData | null
+}
+
+export interface OrderChatMessage {
+  id: number
+  order_conversation_id: number
+  sender_id: number
+  body: string
+  read_at?: string | null
+  created_at: string
+  sender?: AuthUser | null
+}
+
+export interface OrderChatResponse {
+  available: boolean
+  conversation?: {
+    id: number
+    service_order_id: number
+    customer_id: number
+    booster_id?: number | null
+    opened_at?: string | null
+    customer?: AuthUser | null
+    booster?: AuthUser | null
+  }
+  messages: OrderChatMessage[]
 }
 
 export interface WithdrawalRequest {

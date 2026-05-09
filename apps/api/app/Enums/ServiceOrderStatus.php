@@ -4,10 +4,16 @@ namespace App\Enums;
 
 enum ServiceOrderStatus: string
 {
-    case Pending = 'pending';
-    case Paid = 'paid';
-    case Assigned = 'assigned';
-    case InProgress = 'in_progress';
-    case Completed = 'completed';
-    case Cancelled = 'cancelled';
+    case Pending = 'PENDING';
+    case WaitingPayment = 'WAITING_PAYMENT';
+    case Paid = 'PAID';
+    case WaitingBooster = 'WAITING_BOOSTER';
+    case BoosterAssigned = 'BOOSTER_ASSIGNED';
+    case Assigned = 'ASSIGNED';
+    case InProgress = 'IN_PROGRESS';
+    case Completed = 'COMPLETED';
+    case Cancelled = 'CANCELLED';
+    case Failed = 'FAILED';
+    case Refunded = 'REFUNDED';
+    case Expired = 'EXPIRED';
 }

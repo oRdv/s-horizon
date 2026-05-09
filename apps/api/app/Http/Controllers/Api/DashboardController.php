@@ -7,6 +7,7 @@ use App\Enums\ServiceOrderStatus;
 use App\Enums\UserRole;
 use App\Enums\WithdrawalStatus;
 use App\Http\Controllers\Controller;
+use App\Models\Payment;
 use App\Models\PaymentTransaction;
 use App\Models\LandingBooster;
 use App\Models\ServiceOrder;
@@ -26,16 +27,21 @@ class DashboardController extends Controller
                     'total_boosters' => User::query()->where('role', UserRole::Booster->value)->count(),
                     'total_staffs' => User::query()->where('role', UserRole::Staff->value)->count(),
                     'total_orders' => ServiceOrder::query()->count(),
-                    'pending_payments' => PaymentTransaction::query()->where('status', PaymentStatus::Pending->value)->count(),
-                    'total_revenue' => (float) PaymentTransaction::query()->where('status', PaymentStatus::Paid->value)->sum('amount'),
+                    'pending_payments' => Payment::query()->whereIn('status', [
+                        PaymentStatus::Pending->value,
+                        PaymentStatus::WaitingPayment->value,
+                        PaymentStatus::Processing->value,
+                        PaymentStatus::RequiresAction->value,
+                    ])->count(),
+                    'total_revenue' => (int) Payment::query()->where('status', PaymentStatus::Paid->value)->sum('final_amount'),
                     'pending_withdrawals' => WithdrawalRequest::query()->where('status', WithdrawalStatus::Pending->value)->count(),
                 ],
                 'global_goals' => [
                     'meta_faturamento_mes' => 18000,
-                    'faturamento_atual_mes' => (float) PaymentTransaction::query()
+                    'faturamento_atual_mes' => (int) Payment::query()
                         ->where('status', PaymentStatus::Paid->value)
                         ->whereMonth('created_at', now()->month)
-                        ->sum('amount'),
+                        ->sum('final_amount'),
                     'meta_pedidos_mes' => 55,
                     'pedidos_abertos_mes' => ServiceOrder::query()
                         ->whereMonth('created_at', now()->month)
@@ -85,7 +91,8 @@ class DashboardController extends Controller
                     'active_orders' => ServiceOrder::query()
                         ->whereIn('status', [
                             ServiceOrderStatus::Paid->value,
-                            ServiceOrderStatus::Assigned->value,
+                            ServiceOrderStatus::WaitingBooster->value,
+                            ServiceOrderStatus::BoosterAssigned->value,
                             ServiceOrderStatus::InProgress->value,
                         ])
                         ->count(),
@@ -101,11 +108,16 @@ class DashboardController extends Controller
                 ],
                 'finance' => [
                     'pending_withdrawals' => WithdrawalRequest::query()->where('status', WithdrawalStatus::Pending->value)->count(),
-                    'pending_transactions' => PaymentTransaction::query()->where('status', PaymentStatus::Pending->value)->count(),
-                    'month_revenue' => (float) PaymentTransaction::query()
+                    'pending_transactions' => Payment::query()->whereIn('status', [
+                        PaymentStatus::Pending->value,
+                        PaymentStatus::WaitingPayment->value,
+                        PaymentStatus::Processing->value,
+                        PaymentStatus::RequiresAction->value,
+                    ])->count(),
+                    'month_revenue' => (int) Payment::query()
                         ->where('status', PaymentStatus::Paid->value)
                         ->whereMonth('created_at', now()->month)
-                        ->sum('amount'),
+                        ->sum('final_amount'),
                 ],
             ],
         ]);
@@ -124,8 +136,8 @@ class DashboardController extends Controller
             ->with(['customer:id,name,email,role'])
             ->whereNull('booster_id')
             ->whereIn('status', [
-                ServiceOrderStatus::Pending->value,
                 ServiceOrderStatus::Paid->value,
+                ServiceOrderStatus::WaitingBooster->value,
             ])
             ->latest()
             ->limit(40)
@@ -149,7 +161,7 @@ class DashboardController extends Controller
                         ->count(),
                     'active_orders' => ServiceOrder::query()
                         ->where('booster_id', $user->getKey())
-                        ->whereIn('status', [ServiceOrderStatus::Assigned->value, ServiceOrderStatus::InProgress->value])
+                        ->whereIn('status', [ServiceOrderStatus::BoosterAssigned->value, ServiceOrderStatus::InProgress->value])
                         ->count(),
                 ],
                 'earnings' => [
@@ -176,7 +188,8 @@ class DashboardController extends Controller
                     ->where('customer_id', $user->getKey())
                     ->latest()
                     ->get(),
-                'payments' => PaymentTransaction::query()
+                'payments' => Payment::query()
+                    ->with('serviceOrder')
                     ->where('user_id', $user->getKey())
                     ->latest()
                     ->get(),

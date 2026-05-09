@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\BoosterApplicationController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\LandingBoosterController;
 use App\Http\Controllers\Api\MatchReportController;
+use App\Http\Controllers\Api\OrderChatController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\SecurityController;
@@ -23,6 +24,8 @@ Route::prefix('auth')->group(function (): void {
 
 Route::post('/booster-applications/public', [BoosterApplicationController::class, 'publicStore']);
 Route::get('/landing/boosters', [LandingBoosterController::class, 'publicIndex']);
+Route::post('/payments/stripe/webhook', [PaymentController::class, 'stripeWebhook']);
+Route::post('/payments/mercado-pago/webhook', [PaymentController::class, 'mercadoPagoWebhook']);
 
 Route::middleware('auth.jwt')->group(function (): void {
     Route::get('/me', [AuthController::class, 'me']);
@@ -95,11 +98,18 @@ Route::middleware('auth.jwt')->group(function (): void {
 
     Route::prefix('payments')->group(function (): void {
         Route::get('/', [PaymentController::class, 'index']);
+        Route::get('/methods/{boostId}', [PaymentController::class, 'methods']);
+        Route::post('/create', [PaymentController::class, 'create']);
+        Route::get('/{paymentId}/status', [PaymentController::class, 'status']);
         Route::post('/customer', [PaymentController::class, 'createCustomerPayment'])
             ->middleware('permission:payments.customer.create');
     });
 
-    Route::prefix('orders')->middleware('role:booster')->group(function (): void {
+    Route::prefix('orders')->group(function (): void {
+        Route::get('/', [ServiceOrderController::class, 'index']);
+        Route::get('/{serviceOrder}', [ServiceOrderController::class, 'show']);
+        Route::get('/{serviceOrder}/chat', [OrderChatController::class, 'show']);
+        Route::post('/{serviceOrder}/chat/messages', [OrderChatController::class, 'store']);
         Route::post('/{serviceOrder}/claim', [ServiceOrderController::class, 'claim']);
     });
 

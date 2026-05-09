@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@fontsource/space-grotesk": "^5.2.10",
+    "@stripe/react-stripe-js": "^6.3.0",
+    "@stripe/stripe-js": "^9.4.0",
     "axios": "^1.15.0",
     "clsx": "^2.1.1",
     "lucide-react": "^1.8.0",

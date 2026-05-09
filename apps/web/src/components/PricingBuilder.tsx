@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js'
+import { loadStripe } from '@stripe/stripe-js'
 import {
   ArrowUpRight,
+  CheckCircle,
   Clock3,
   Copy,
   CreditCard,
-  ExternalLink,
   Headphones,
   Loader2,
   Minus,
@@ -45,7 +47,13 @@ import { getApiErrorMessage } from '@/services/api/errors'
 import { getLolChampionOptions, type LolChampionOption } from '@/services/riot'
 import { systemService } from '@/services/system'
 import { useToastStore } from '@/store/useToastStore'
-import type { PaymentGatewayPayload, PaymentTransaction, ServiceOrder } from '@/types/system'
+import type {
+  PaymentGatewayPayload,
+  PaymentMethod,
+  PaymentMethodsResponse,
+  PaymentTransaction,
+  ServiceOrder,
+} from '@/types/system'
 
 interface PricingBuilderProps {
   variant?: 'page' | 'dashboard'
@@ -110,9 +118,7 @@ interface PaymentCheckoutState {
   transaction: PaymentTransaction
 }
 
-interface PaymentReviewState {
-  method: 'pix' | 'card'
-}
+type PaymentWizardStep = 'summary' | 'method' | 'card' | 'pixConfirm' | 'pixQr' | 'status'
 
 const modeCards: ModeCard[] = [
   {
@@ -281,6 +287,13 @@ function formatCurrency(value: number | string) {
     currency: 'BRL',
     maximumFractionDigits: 0,
   }).format(Number(value))
+}
+
+function formatCurrencyCents(value: number | string) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(Number(value) / 100)
 }
 
 function formatEstimatedDays(days: number) {
@@ -506,15 +519,116 @@ function ChampionPickerModal(props: {
   return createPortal(modalNode, document.body)
 }
 
-function PaymentReviewModal(props: {
+
+function PaymentWizardProgress({ step }: { step: PaymentWizardStep }) {
+  const activeIndex = step === 'summary' ? 0 : step === 'method' ? 1 : 2
+  const items = ['Pedido', 'Pagamento', 'Confirmacao']
+
+  return (
+    <div className="payment-wizard__progress" aria-label="Progresso do pagamento">
+      {items.map((item, index) => (
+        <div className={`payment-wizard__progress-item${index <= activeIndex ? ' is-active' : ''}`} key={item}>
+          <span>{index + 1}</span>
+          <strong>{item}</strong>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function StripeCardPaymentForm(props: {
+  checkout: PaymentCheckoutState
+  onProcessing: (status: string) => void
+}) {
+  const { checkout, onProcessing } = props
+  const stripe = useStripe()
+  const elements = useElements()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [cardError, setCardError] = useState<string | null>(null)
+  const [cardholderName, setCardholderName] = useState('')
+
+  async function handleSubmit() {
+    if (!stripe || !elements || isSubmitting) {
+      return
+    }
+
+    const normalizedName = cardholderName.trim()
+    if (!normalizedName) {
+      setCardError('Informe o nome impresso no cartao.')
+      return
+    }
+
+    setIsSubmitting(true)
+    setCardError(null)
+
+    const paymentId = checkout.gateway.paymentId ?? checkout.transaction.id
+    const result = await stripe.confirmPayment({
+      elements,
+      confirmParams: {
+        return_url: `${window.location.origin}/payment/processing?payment_id=${paymentId}`,
+        payment_method_data: {
+          billing_details: {
+            name: normalizedName,
+          },
+        },
+      },
+      redirect: 'if_required',
+    })
+
+    if (result.error) {
+      setCardError(result.error.message ?? 'A Stripe nao conseguiu confirmar o pagamento.')
+      setIsSubmitting(false)
+      return
+    }
+
+    onProcessing(result.paymentIntent?.status === 'succeeded' ? 'PROCESSING' : result.paymentIntent?.status?.toUpperCase() ?? 'PROCESSING')
+  }
+
+  return (
+    <div className="payment-wizard__stripe">
+      <label className="payment-wizard__cardholder">
+        <span>Nome no cartao</span>
+        <input
+          autoComplete="cc-name"
+          disabled={isSubmitting}
+          onChange={(event) => setCardholderName(event.target.value)}
+          placeholder="Como aparece no cartao"
+          type="text"
+          value={cardholderName}
+        />
+      </label>
+      <div className="payment-wizard__stripe-shell">
+        <PaymentElement
+          options={{
+            layout: {
+              type: 'tabs',
+              defaultCollapsed: false,
+            },
+          }}
+        />
+      </div>
+      {cardError ? <div className="payment-wizard__alert payment-wizard__alert--error">{cardError}</div> : null}
+      <button
+        className="primary-button primary-button--crimson payment-wizard__full-button"
+        disabled={!stripe || !elements || isSubmitting}
+        onClick={() => void handleSubmit()}
+        type="button"
+      >
+        {isSubmitting ? <Loader2 className="spin-icon" size={16} /> : <CreditCard size={16} />}
+        Pagar agora
+      </button>
+    </div>
+  )
+}
+
+function PaymentWizardModal(props: {
   addonAmount: number
   addonPercent: number
+  createOrder: () => Promise<ServiceOrder>
   deliveryEstimateLabel: string | null
   freeAddons: string[]
-  isLoading: boolean
-  method: 'pix' | 'card' | null
   onClose: () => void
-  onConfirm: () => void
+  onOrderCreated?: (payload: { transaction: PaymentTransaction; order: ServiceOrder }) => void
   open: boolean
   paidAddons: Array<{ key: string; label: string; percent: number }>
   routeLabel: string
@@ -524,41 +638,52 @@ function PaymentReviewModal(props: {
   const {
     addonAmount,
     addonPercent,
+    createOrder,
     deliveryEstimateLabel,
     freeAddons,
-    isLoading,
-    method,
     onClose,
-    onConfirm,
+    onOrderCreated,
     open,
     paidAddons,
     routeLabel,
     serviceLabel,
     total,
   } = props
+  const addToast = useToastStore((state) => state.addToast)
   const modalRef = useRef<HTMLElement | null>(null)
+  const [step, setStep] = useState<PaymentWizardStep>('summary')
+  const [order, setOrder] = useState<ServiceOrder | null>(null)
+  const [methods, setMethods] = useState<PaymentMethodsResponse | null>(null)
+  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null)
+  const [installments, setInstallments] = useState(1)
+  const [checkout, setCheckout] = useState<PaymentCheckoutState | null>(null)
+  const [currentTime, setCurrentTime] = useState(() => Date.now())
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null)
+  const [status, setStatus] = useState<string | null>(null)
+  const [isBusy, setIsBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const selectedOption = methods?.methods.find((method) => method.method === selectedMethod) ?? null
+  const clientSecret = checkout?.gateway.clientSecret ?? null
+  const publishableKey = checkout?.gateway.publishableKey ?? null
+  const stripePromise = useMemo(() => (publishableKey ? loadStripe(publishableKey) : null), [publishableKey])
+  const pixCopyPaste = checkout?.gateway.pixCopyPaste ?? null
+  const qrCodePayload = checkout?.gateway.qrCode ?? pixCopyPaste
+  const qrCodeBase64 = checkout?.gateway.qrCodeBase64 ?? null
+  const expiresAt = checkout?.gateway.expiresAt ?? checkout?.transaction.expiresAt ?? null
+  const expiresAtMs = expiresAt ? new Date(expiresAt).getTime() : null
+  const remainingMs = expiresAtMs ? Math.max(0, expiresAtMs - currentTime) : null
 
   useEffect(() => {
-    if (!open) {
-      return
-    }
+    if (!open) return
 
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-
-    window.scrollTo({
-      top: 0,
-      behavior: 'auto',
-    })
-
-    requestAnimationFrame(() => {
-      modalRef.current?.focus()
-    })
+    window.scrollTo({ top: 0, behavior: 'auto' })
+    requestAnimationFrame(() => modalRef.current?.focus())
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !isLoading) {
-        onClose()
-      }
+      if (event.key === 'Escape' && !isBusy) onClose()
     }
 
     document.addEventListener('keydown', handleKeyDown)
@@ -567,311 +692,439 @@ function PaymentReviewModal(props: {
       document.body.style.overflow = previousOverflow
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [isLoading, onClose, open])
-
-  if (!open || !method) {
-    return null
-  }
-
-  const modalNode = (
-    <div className="modal-backdrop" onMouseDown={isLoading ? undefined : onClose}>
-      <section
-        aria-labelledby="payment-review-title"
-        aria-modal="true"
-        className="payment-review-modal"
-        onMouseDown={(event) => event.stopPropagation()}
-        role="dialog"
-        tabIndex={-1}
-        ref={modalRef}
-      >
-        <button
-          aria-label="Fechar confirmacao"
-          className="confirm-modal__close"
-          disabled={isLoading}
-          onClick={onClose}
-          type="button"
-        >
-          <X size={18} />
-        </button>
-
-        <div className="payment-review-modal__header">
-          <span className="panel__eyebrow">Confirmacao do pedido</span>
-          <h2 id="payment-review-title">Confira antes de gerar o pagamento</h2>
-          <p>Revise rota, adicionais e forma de pagamento antes de abrir o checkout.</p>
-        </div>
-
-        <div className="payment-review-modal__summary">
-          <div>
-            <span>Serviço</span>
-            <strong>{serviceLabel}</strong>
-          </div>
-          <div>
-            <span>Rota</span>
-            <strong>{routeLabel}</strong>
-          </div>
-          <div>
-            <span>Pagamento</span>
-            <strong>{method === 'pix' ? 'Pix' : 'Cartao'}</strong>
-          </div>
-          {deliveryEstimateLabel ? (
-            <div>
-              <span>Prazo</span>
-              <strong>{deliveryEstimateLabel}</strong>
-            </div>
-          ) : null}
-          <div className="payment-review-modal__summary--total">
-            <span>Total</span>
-            <strong>{formatCurrency(total)}</strong>
-          </div>
-        </div>
-
-        {paidAddons.length || freeAddons.length ? (
-          <div className="payment-review-modal__items">
-            {paidAddons.length ? (
-              <div className="payment-review-modal__items-group">
-                <span>Adicionais pagos</span>
-                <div className="payment-review-modal__chip-list">
-                  {paidAddons.map((addon) => (
-                    <span key={addon.key}>
-                      {addon.label} +{addon.percent}%
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            {freeAddons.length ? (
-              <div className="payment-review-modal__items-group">
-                <span>Preferências inclusas</span>
-                <div className="payment-review-modal__chip-list">
-                  {freeAddons.map((addon) => (
-                    <span key={addon}>{addon}</span>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        {addonPercent ? (
-          <div className="payment-review-modal__price-note">
-            <span>Adicionais</span>
-            <strong>
-              +{addonPercent}% · {formatCurrency(addonAmount)}
-            </strong>
-          </div>
-        ) : null}
-
-        <div className="payment-review-modal__actions">
-          <button className="ghost-button" disabled={isLoading} onClick={onClose} type="button">
-            Voltar
-          </button>
-          <button className="primary-button primary-button--crimson" disabled={isLoading} onClick={onConfirm} type="button">
-            {isLoading ? 'Gerando pagamento...' : `Confirmar ${method === 'pix' ? 'Pix' : 'cartão'}`}
-          </button>
-        </div>
-      </section>
-    </div>
-  )
-
-  return createPortal(modalNode, document.body)
-}
-
-function PaymentGatewayModal(props: {
-  checkout: PaymentCheckoutState | null
-  onClose: () => void
-}) {
-  const { checkout, onClose } = props
-  const addToast = useToastStore((state) => state.addToast)
-  const [currentTime, setCurrentTime] = useState(() => Date.now())
-  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null)
-  const modalRef = useRef<HTMLElement | null>(null)
-
-  const paymentData = checkout?.gateway.payment_data ?? null
-  const isPix = paymentData?.type === 'pix'
-  const expiresAtMs = paymentData?.expires_at ? new Date(paymentData.expires_at).getTime() : null
-  const remainingMs = expiresAtMs ? Math.max(0, expiresAtMs - currentTime) : null
+  }, [isBusy, onClose, open])
 
   useEffect(() => {
-    if (!checkout || !isPix || !paymentData?.qr_code_payload) {
-      return
+    if (!open) {
+      setStep('summary')
+      setOrder(null)
+      setMethods(null)
+      setSelectedMethod(null)
+      setInstallments(1)
+      setCheckout(null)
+      setQrCodeDataUrl(null)
+      setStatus(null)
+      setError(null)
     }
+  }, [open])
+
+  useEffect(() => {
+    if (!checkout || step !== 'pixQr' || !qrCodePayload || qrCodeBase64) return
 
     let active = true
 
-    void QRCode.toDataURL(paymentData.qr_code_payload, {
+    void QRCode.toDataURL(qrCodePayload, {
       errorCorrectionLevel: 'M',
       margin: 1,
       width: 280,
-      color: {
-        dark: '#130d0d',
-        light: '#fff7f7',
-      },
-    }).then((dataUrl: string) => {
-      if (active) {
-        setQrCodeDataUrl(dataUrl)
-      }
+      color: { dark: '#130d0d', light: '#fff7f7' },
+    }).then((dataUrl) => {
+      if (active) setQrCodeDataUrl(dataUrl)
     })
 
     return () => {
       active = false
     }
-  }, [checkout, isPix, paymentData?.qr_code_payload])
+  }, [checkout, qrCodeBase64, qrCodePayload, step])
 
   useEffect(() => {
-    if (!checkout) {
-      return
-    }
+    if (!expiresAtMs || step !== 'pixQr') return
+    const interval = window.setInterval(() => setCurrentTime(Date.now()), 1000)
+    return () => window.clearInterval(interval)
+  }, [expiresAtMs, step])
 
-    const previousOverflow = document.body.style.overflow
+  useEffect(() => {
+    if (!checkout || (step !== 'pixQr' && step !== 'status')) return
 
-    window.scrollTo({
-      top: 0,
-      behavior: 'auto',
-    })
+    let active = true
+    const paymentId = checkout.gateway.paymentId ?? checkout.transaction.id
 
-    document.body.style.overflow = 'hidden'
-    modalRef.current?.focus()
+    const poll = async () => {
+      try {
+        const payment = await systemService.getPaymentStatus(Number(paymentId))
+        if (!active) return
+        setStatus(payment.status)
 
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        onClose()
+        if (['PAID', 'FAILED', 'EXPIRED', 'REFUNDED', 'CANCELLED'].includes(payment.status)) {
+          setStep('status')
+          if (payment.status === 'PAID') {
+            window.setTimeout(() => {
+              window.location.href = '/orders'
+            }, 2600)
+          }
+        }
+      } catch {
+        // polling failures do not alter provider state
       }
     }
 
-    document.addEventListener('keydown', handleKeyDown)
+    void poll()
+    const interval = window.setInterval(() => void poll(), step === 'status' ? 3000 : 5000)
 
     return () => {
-      document.body.style.overflow = previousOverflow
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [checkout, onClose])
-
-  useEffect(() => {
-    if (!checkout || !expiresAtMs) {
-      return
-    }
-
-    const interval = window.setInterval(() => {
-      setCurrentTime(Date.now())
-    }, 1000)
-
-    return () => {
+      active = false
       window.clearInterval(interval)
     }
-  }, [checkout, expiresAtMs])
+  }, [checkout, step])
 
-  if (!checkout) {
-    return null
+  if (!open) return null
+
+  async function proceedToMethods() {
+    setIsBusy(true)
+    setError(null)
+    setQrCodeDataUrl(null)
+
+    try {
+      const nextOrder = order ?? await createOrder()
+      setOrder(nextOrder)
+      const nextMethods = await systemService.getPaymentMethods(nextOrder.id)
+      setMethods(nextMethods)
+      const firstAvailable = nextMethods.methods.find((method) => method.available)
+      setSelectedMethod((current) => current ?? firstAvailable?.method ?? null)
+      setStep('method')
+    } catch (requestError: unknown) {
+      setError(getApiErrorMessage(requestError, 'Nao foi possivel preparar o pagamento.'))
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  async function createProviderPayment(method: PaymentMethod, nextInstallments = 1) {
+    if (!order) return
+
+    setIsBusy(true)
+    setError(null)
+
+    try {
+      const gateway = await systemService.createPayment({
+        boostId: order.id,
+        orderId: order.id,
+        method,
+        installments: nextInstallments,
+      })
+      const transaction = {
+        ...gateway.payment,
+        service_order: gateway.payment.service_order ?? order,
+      }
+      setCheckout({ gateway, order, transaction })
+      setStatus(gateway.payment.status)
+      onOrderCreated?.({ order, transaction })
+      setStep(method === 'PIX' ? 'pixQr' : 'card')
+    } catch (requestError: unknown) {
+      setError(getApiErrorMessage(requestError, 'Nao foi possivel iniciar o pagamento.'))
+    } finally {
+      setIsBusy(false)
+    }
   }
 
   async function handleCopyPixCode() {
-    if (!paymentData?.pix_copy_paste) {
-      return
-    }
+    if (!pixCopyPaste) return
 
     try {
-      await navigator.clipboard.writeText(paymentData.pix_copy_paste)
-      addToast({
-        tone: 'success',
-        title: 'Código Pix copiado',
-        description: 'Agora é só colar o código no app do seu banco.',
-      })
+      await navigator.clipboard.writeText(pixCopyPaste)
+      addToast({ tone: 'success', title: 'Codigo copiado', description: 'Cole no app do banco para pagar.' })
     } catch {
-      addToast({
-        tone: 'error',
-        title: 'Não foi possível copiar',
-        description: 'Copie o código manualmente pelo modal.',
-      })
+      addToast({ tone: 'error', title: 'Nao foi possivel copiar', description: 'Copie o codigo manualmente.' })
     }
   }
 
+  function handleGenerateNewPix() {
+    setCheckout(null)
+    setStatus(null)
+    setQrCodeDataUrl(null)
+    setStep('pixConfirm')
+  }
+
+  function continueFromMethod() {
+    if (!selectedMethod || !selectedOption?.available) return
+
+    if (selectedMethod === 'PIX') {
+      setStep('pixConfirm')
+      return
+    }
+
+    setStep('card')
+  }
+
+  function renderSummaryGrid(showPayment = false) {
+    return (
+      <div className="payment-wizard__summary-grid">
+        <div>
+          <span>Servico</span>
+          <strong>{serviceLabel}</strong>
+        </div>
+        <div>
+          <span>Rota</span>
+          <strong>{routeLabel}</strong>
+        </div>
+        {deliveryEstimateLabel ? (
+          <div>
+            <span>Prazo</span>
+            <strong>{deliveryEstimateLabel}</strong>
+          </div>
+        ) : null}
+        {showPayment && selectedOption ? (
+          <div>
+            <span>Metodo</span>
+            <strong>{selectedOption.label}</strong>
+          </div>
+        ) : null}
+        <div className="payment-wizard__summary-total">
+          <span>Valor</span>
+          <strong>{showPayment && selectedOption ? formatCurrencyCents(selectedOption.finalAmount) : formatCurrency(total)}</strong>
+        </div>
+      </div>
+    )
+  }
+
+  function renderStatusTitle() {
+    if (status === 'PAID') return 'Pagamento aprovado'
+    if (status === 'PROCESSING' || status === 'REQUIRES_ACTION' || status === 'WAITING_PAYMENT') return 'Pagamento em processamento'
+    if (status === 'EXPIRED') return 'PIX expirado'
+    return 'Pagamento recusado'
+  }
+
+  const paidAmount = checkout?.transaction.finalAmount ?? checkout?.transaction.amount ?? selectedOption?.finalAmount ?? total
+  const orderNumber = order?.id ?? checkout?.transaction.orderId
+  const methodLabel = selectedOption?.label ?? checkout?.transaction.method ?? 'Pagamento'
+
   const modalNode = (
-    <div className="modal-backdrop" onMouseDown={onClose}>
+    <div className="modal-backdrop" onMouseDown={isBusy ? undefined : onClose}>
       <section
-        aria-labelledby="payment-checkout-title"
+        aria-labelledby="payment-wizard-title"
         aria-modal="true"
-        className="payment-checkout-modal"
+        className="payment-wizard"
         onMouseDown={(event) => event.stopPropagation()}
         role="dialog"
         tabIndex={-1}
         ref={modalRef}
       >
-        <button aria-label="Fechar checkout" className="confirm-modal__close" onClick={onClose} type="button">
+        <button aria-label="Fechar pagamento" className="confirm-modal__close" disabled={isBusy} onClick={onClose} type="button">
           <X size={18} />
         </button>
 
-        <div className="payment-checkout-modal__header">
-          <span className="panel__eyebrow">Pagamento Stripe</span>
-          <h2 id="payment-checkout-title">{isPix ? 'Pix copia e cola' : 'Checkout do cartão preparado'}</h2>
-          <p>
-            {isPix
-              ? 'Assim que o Pix abre, a tela sobe direto para o modal de pagamento.'
-              : 'O checkout do cartão está mockado por enquanto e já sai com referência Stripe.'}
-          </p>
+        <PaymentWizardProgress step={step} />
+
+        <div className="payment-wizard__header">
+          <span className="panel__eyebrow">Checkout</span>
+          <h2 id="payment-wizard-title">
+            {step === 'summary'
+              ? 'Revise seu pedido'
+              : step === 'method'
+                ? 'Escolha o pagamento'
+                : step === 'pixConfirm'
+                  ? 'Confirmar PIX'
+                  : step === 'pixQr'
+                    ? 'PIX gerado'
+                    : step === 'card'
+                      ? 'Dados do cartao'
+                      : renderStatusTitle()}
+          </h2>
         </div>
 
-        {isPix ? (
-          <div className="payment-checkout-modal__pix-layout">
-            <div className="payment-checkout-modal__qr-card">
-              <div className="payment-checkout-modal__qr-frame">
-                {qrCodeDataUrl ? (
-                  <img alt="QR Code Pix do pedido" src={qrCodeDataUrl} />
-                ) : (
-                  <div className="payment-checkout-modal__qr-placeholder">
-                    <QrCode size={44} />
+        {error ? <div className="payment-wizard__alert payment-wizard__alert--error">{error}</div> : null}
+
+        {step === 'summary' ? (
+          <>
+            {renderSummaryGrid()}
+            {paidAddons.length || freeAddons.length || addonPercent ? (
+              <div className="payment-wizard__details">
+                {addonPercent ? (
+                  <div>
+                    <span>Personalizacoes</span>
+                    <strong>{formatCurrency(addonAmount)}</strong>
                   </div>
-                )}
+                ) : null}
+                {[...paidAddons.map((addon) => addon.label), ...freeAddons].slice(0, 6).map((item) => (
+                  <span key={item}>{item}</span>
+                ))}
               </div>
+            ) : null}
+            <div className="payment-wizard__actions">
+              <button className="primary-button primary-button--crimson" disabled={isBusy} onClick={() => void proceedToMethods()} type="button">
+                {isBusy ? <Loader2 className="spin-icon" size={16} /> : <ShoppingCart size={16} />}
+                Prosseguir para o pagamento
+              </button>
+            </div>
+          </>
+        ) : null}
 
-              <div className="payment-checkout-modal__badge">
+        {step === 'method' ? (
+          <>
+            <div className="payment-wizard__method-grid">
+              {methods?.methods.map((option) => {
+                const Icon = option.method === 'PIX' ? QrCode : CreditCard
+                return (
+                  <button
+                    className={`payment-wizard__method-card${selectedMethod === option.method ? ' is-selected' : ''}`}
+                    disabled={!option.available}
+                    key={option.method}
+                    onClick={() => {
+                      setSelectedMethod(option.method)
+                      setInstallments(1)
+                      setCheckout(null)
+                      setStatus(null)
+                    }}
+                    type="button"
+                  >
+                    <Icon size={20} />
+                    <span>{option.label}</span>
+                    <strong>{formatCurrencyCents(option.finalAmount)}</strong>
+                  </button>
+                )
+              })}
+            </div>
+            <div className="payment-wizard__actions">
+              <button className="ghost-button" disabled={isBusy} onClick={() => setStep('summary')} type="button">
+                Voltar
+              </button>
+              <button className="primary-button primary-button--crimson" disabled={!selectedOption?.available || isBusy} onClick={continueFromMethod} type="button">
+                Continuar
+              </button>
+            </div>
+          </>
+        ) : null}
+
+        {step === 'pixConfirm' && selectedOption ? (
+          <>
+            {renderSummaryGrid(true)}
+            <div className="payment-wizard__actions">
+              <button className="ghost-button" disabled={isBusy} onClick={() => setStep('method')} type="button">
+                Voltar
+              </button>
+              <button className="primary-button primary-button--crimson" disabled={isBusy} onClick={() => void createProviderPayment('PIX')} type="button">
+                {isBusy ? <Loader2 className="spin-icon" size={16} /> : <QrCode size={16} />}
+                Gerar PIX
+              </button>
+            </div>
+          </>
+        ) : null}
+
+        {step === 'pixQr' ? (
+          <div className="payment-wizard__pix-layout">
+            <div className="payment-wizard__qr-frame">
+              {qrCodeBase64 || qrCodeDataUrl ? (
+                <img alt="QR Code Pix do pedido" src={qrCodeBase64 ? `data:image/png;base64,${qrCodeBase64}` : qrCodeDataUrl ?? ''} />
+              ) : (
+                <QrCode size={44} />
+              )}
+            </div>
+            <div className="payment-wizard__pix-copy">
+              <div className="payment-wizard__status-pill">
                 <Clock3 size={16} />
-                <span>{remainingMs !== null ? `Expira em ${formatCountdown(remainingMs)}` : 'Expiracao indisponivel'}</span>
+                <span>Aguardando pagamento</span>
               </div>
-            </div>
-
-            <div className="payment-checkout-modal__pix-copy">
-              <label className="payment-checkout-modal__copy-block">
-                <span>Copia e cola Pix</span>
-                <textarea readOnly rows={5} value={paymentData?.pix_copy_paste ?? ''} />
+              <label className="payment-wizard__copy-block">
+                <span>Codigo PIX</span>
+                <textarea readOnly rows={5} value={pixCopyPaste ?? ''} />
               </label>
-
-              <div className="payment-checkout-modal__timer">
-                <span>Expira em</span>
-                <strong>{remainingMs !== null ? formatCountdown(remainingMs) : formatDateTime(paymentData?.expires_at) ?? '30:00'}</strong>
+              <div className="payment-wizard__timer">
+                <span>Validade</span>
+                <strong>{remainingMs !== null ? formatCountdown(remainingMs) : formatDateTime(expiresAt) ?? 'Aguardando'}</strong>
               </div>
-
-              <div className="payment-checkout-modal__actions">
-                <button className="primary-button primary-button--crimson" onClick={() => void handleCopyPixCode()} type="button">
-                  <Copy size={16} />
-                  Copiar codigo Pix
-                </button>
-                <button className="ghost-button" onClick={onClose} type="button">
-                  Fechar
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="payment-checkout-modal__card-state">
-            <div className="payment-checkout-modal__badge">
-              <Clock3 size={16} />
-              <span>Checkout mockado aguardando integracao real</span>
-            </div>
-
-            <div className="payment-checkout-modal__actions">
-              {checkout.gateway.checkout_url ? (
-                <a className="primary-button primary-button--crimson" href={checkout.gateway.checkout_url} rel="noreferrer" target="_blank">
-                  <ExternalLink size={16} />
-                  Abrir checkout Stripe
-                </a>
-              ) : null}
-              <button className="ghost-button" onClick={onClose} type="button">
-                Fechar
+              <button className="primary-button primary-button--crimson" onClick={() => void handleCopyPixCode()} type="button">
+                <Copy size={16} />
+                Copiar codigo PIX
               </button>
             </div>
           </div>
-        )}
+        ) : null}
+
+        {step === 'card' && selectedOption ? (
+          <>
+            {renderSummaryGrid(true)}
+            {selectedMethod === 'CREDIT_CARD' ? (
+              <div className="payment-wizard__installments" aria-label="Parcelas">
+                {selectedOption.installments.map((item) => (
+                  <button
+                    className={installments === item.quantity ? 'is-selected' : ''}
+                    key={item.quantity}
+                    onClick={() => setInstallments(item.quantity)}
+                    type="button"
+                  >
+                    <span>{item.quantity}x</span>
+                    <strong>{formatCurrencyCents(item.amount)}</strong>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {!checkout ? (
+              <div className="payment-wizard__actions">
+                <button className="ghost-button" disabled={isBusy} onClick={() => setStep('method')} type="button">
+                  Voltar
+                </button>
+                <button
+                  className="primary-button primary-button--crimson"
+                  disabled={isBusy || !selectedMethod}
+                  onClick={() => selectedMethod && void createProviderPayment(selectedMethod, selectedMethod === 'CREDIT_CARD' ? installments : 1)}
+                  type="button"
+                >
+                  {isBusy ? <Loader2 className="spin-icon" size={16} /> : <CreditCard size={16} />}
+                  Continuar
+                </button>
+              </div>
+            ) : clientSecret && stripePromise ? (
+              <Elements
+                key={clientSecret}
+                stripe={stripePromise}
+                options={{
+                  clientSecret,
+                  appearance: stripePaymentAppearance,
+                  loader: 'auto',
+                }}
+              >
+                <StripeCardPaymentForm
+                  checkout={checkout}
+                  onProcessing={(nextStatus) => {
+                    setStatus(nextStatus)
+                    setStep('status')
+                  }}
+                />
+              </Elements>
+            ) : (
+              <div className="payment-wizard__alert payment-wizard__alert--error">Nao foi possivel iniciar o pagamento com cartao.</div>
+            )}
+          </>
+        ) : null}
+
+        {step === 'status' ? (
+          <div className={`payment-wizard__status${status === 'PAID' ? ' payment-wizard__status--paid' : ''}`}>
+            {status === 'PAID' ? (
+              <>
+                <div className="payment-wizard__success-icon">
+                  <CheckCircle size={58} />
+                </div>
+                <strong>Pagamento aprovado</strong>
+                <span>Seu pedido foi confirmado e ja entrou na fila de atendimento.</span>
+                <div className="payment-wizard__receipt">
+                  <div>
+                    <span>Valor pago</span>
+                    <strong>{typeof paidAmount === 'number' && paidAmount > 999 ? formatCurrencyCents(paidAmount) : formatCurrency(Number(paidAmount))}</strong>
+                  </div>
+                  <div>
+                    <span>Pedido</span>
+                    <strong>#{orderNumber}</strong>
+                  </div>
+                  <div>
+                    <span>Metodo</span>
+                    <strong>{methodLabel}</strong>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <strong>{renderStatusTitle()}</strong>
+                <span>O status exibido vem da confirmacao do backend.</span>
+                {status === 'EXPIRED' && selectedMethod === 'PIX' ? (
+                  <button className="primary-button primary-button--crimson" onClick={handleGenerateNewPix} type="button">
+                    <QrCode size={16} />
+                    Gerar novo PIX
+                  </button>
+                ) : null}
+              </>
+            )}
+          </div>
+        ) : null}
       </section>
     </div>
   )
@@ -902,9 +1155,7 @@ export function PricingBuilder({
   const [isChampionPickerOpen, setIsChampionPickerOpen] = useState(false)
   const [championOptions, setChampionOptions] = useState<LolChampionOption[]>([])
   const [isLoadingChampions, setIsLoadingChampions] = useState(true)
-  const [creatingMethod, setCreatingMethod] = useState<'pix' | 'card' | null>(null)
-  const [reviewState, setReviewState] = useState<PaymentReviewState | null>(null)
-  const [checkoutState, setCheckoutState] = useState<PaymentCheckoutState | null>(null)
+  const [isPaymentWizardOpen, setIsPaymentWizardOpen] = useState(false)
 
   const activeFamily = getFamilyForMode(mode)
   const familyMeta = familyCards.find((card) => card.family === activeFamily) ?? familyCards[0]
@@ -1032,6 +1283,10 @@ export function PricingBuilder({
       entries.push({ key: 'restricted_hours', label: 'Horarios restritos', percent: 10 })
     }
 
+    if (addons.streamOnline) {
+      entries.push({ key: 'stream_online', label: 'Stream online', percent: 10 })
+    }
+
     if (supportsReduceKda && addons.reduceKda) {
       entries.push({ key: 'reduce_kda', label: 'Reducao do KD', percent: 30 })
     }
@@ -1066,10 +1321,6 @@ export function PricingBuilder({
       entries.push(`Campeões específicos: ${addons.specificChampions.join(', ')}`)
     }
 
-    if (addons.streamOnline) {
-      entries.push('Stream online')
-    }
-
     return entries
   }, [addons, supportsChampionSelector, supportsFlashPosition, supportsRoutes])
 
@@ -1077,104 +1328,60 @@ export function PricingBuilder({
   const addonAmount = Math.round(baseTotal * (addonPercent / 100))
   const finalTotal = baseTotal + addonAmount
 
-  async function handleCreateOrder(method: 'pix' | 'card') {
+  async function createOrderDraft(): Promise<ServiceOrder> {
     if (!canCheckout || !quote) {
-      if (invalidLadder) {
-        addToast({
-          tone: 'error',
-          title: 'Ajuste a rota do pedido',
-          description: invalidLadder,
-        })
-      }
-
-      return
+      throw new Error(invalidLadder ?? 'Pedido indisponivel para pagamento.')
     }
 
-    setCreatingMethod(method)
+    const titleText = isDivisionMode
+      ? `${getGameLabel(game)} · ${modeMeta.label} ${quote.ladderText}`
+      : `${getGameLabel(game)} · ${modeMeta.label} ${formatTierDivision(unitTier)}`
+    const descriptionText = `${modeMeta.shortDescription} ${quote.summary}.`
+    const { order } = await systemService.createCustomerPayment({
+      service_type: modeMeta.serviceType,
+      title: titleText,
+      description: descriptionText,
+      amount: Math.round(finalTotal * 100),
+      metadata: {
+        game,
+        calculator_mode: mode,
+        calculator_family: activeFamily,
+        base_price: baseTotal,
+        addon_percent: addonPercent,
+        addon_amount: addonAmount,
+        final_total: finalTotal,
+        quote_summary: quote.summary,
+        ladder_text: quote.ladderText,
+        estimated_delivery_days: deliveryEstimate?.days ?? null,
+        estimated_delivery_label: deliveryEstimate?.fullLabel ?? null,
+        estimated_delivery_deadline: deliveryEstimate?.deadlineLabel ?? null,
+        current_tier: isDivisionMode ? currentTier : unitTier,
+        current_division: isDivisionMode && !isApexTier(currentTier) ? currentDivision : null,
+        target_tier: isDivisionMode ? targetTier : null,
+        target_division: isDivisionMode && !isApexTier(targetTier) ? targetDivision : null,
+        quantity: isDivisionMode ? null : quantity,
+        addons: isDivisionMode
+          ? {
+              mmr_profile: addons.mmrProfile,
+              chat_offline: addons.chatOffline,
+              flash_position: supportsFlashPosition && addons.flashPositionEnabled ? addons.flashPosition : null,
+              specific_routes: supportsRoutes && addons.routesEnabled ? addons.specificRoutes : [],
+              priority_service: addons.priorityService,
+              favorite_booster: addons.favoriteBooster ? addons.favoriteBoosterNote.trim() : null,
+              super_restriction: effectiveSuperRestriction,
+              extra_win: addons.extraWin,
+              specific_champions: supportsChampionSelector && addons.championPoolEnabled ? addons.specificChampions : [],
+              restricted_hours: addons.restrictedHours ? addons.restrictedHoursNote.trim() : null,
+              stream_online: addons.streamOnline,
+              reduce_kda: supportsReduceKda ? addons.reduceKda : false,
+              reduce_delivery: addons.reduceDelivery,
+              solo_only: supportsSoloOnly ? addons.soloOnly : false,
+            }
+          : null,
+      },
+    })
 
-    try {
-      const provider = 'stripe'
-      const titleText = isDivisionMode
-        ? `${getGameLabel(game)} · ${modeMeta.label} ${quote.ladderText}`
-        : `${getGameLabel(game)} · ${modeMeta.label} ${formatTierDivision(unitTier)}`
-      const descriptionText = `${modeMeta.shortDescription} ${quote.summary}.`
-      const { order, transaction, gateway } = await systemService.createCustomerPayment({
-        service_type: modeMeta.serviceType,
-        title: titleText,
-        description: descriptionText,
-        amount: finalTotal,
-        provider,
-        method,
-        metadata: {
-          game,
-          calculator_mode: mode,
-          calculator_family: activeFamily,
-          base_price: baseTotal,
-          addon_percent: addonPercent,
-          addon_amount: addonAmount,
-          final_total: finalTotal,
-          quote_summary: quote.summary,
-          ladder_text: quote.ladderText,
-          estimated_delivery_days: deliveryEstimate?.days ?? null,
-          estimated_delivery_label: deliveryEstimate?.fullLabel ?? null,
-          estimated_delivery_deadline: deliveryEstimate?.deadlineLabel ?? null,
-          current_tier: isDivisionMode ? currentTier : unitTier,
-          current_division: isDivisionMode && !isApexTier(currentTier) ? currentDivision : null,
-          target_tier: isDivisionMode ? targetTier : null,
-          target_division: isDivisionMode && !isApexTier(targetTier) ? targetDivision : null,
-          quantity: isDivisionMode ? null : quantity,
-          addons: isDivisionMode
-            ? {
-                mmr_profile: addons.mmrProfile,
-                chat_offline: addons.chatOffline,
-                flash_position: supportsFlashPosition && addons.flashPositionEnabled ? addons.flashPosition : null,
-                specific_routes: supportsRoutes && addons.routesEnabled ? addons.specificRoutes : [],
-                priority_service: addons.priorityService,
-                favorite_booster: addons.favoriteBooster ? addons.favoriteBoosterNote.trim() : null,
-                super_restriction: effectiveSuperRestriction,
-                extra_win: addons.extraWin,
-                specific_champions:
-                  supportsChampionSelector && addons.championPoolEnabled ? addons.specificChampions : [],
-                restricted_hours: addons.restrictedHours ? addons.restrictedHoursNote.trim() : null,
-                stream_online: addons.streamOnline,
-                reduce_kda: supportsReduceKda ? addons.reduceKda : false,
-                reduce_delivery: addons.reduceDelivery,
-                solo_only: supportsSoloOnly ? addons.soloOnly : false,
-              }
-            : null,
-        },
-      })
-
-      const nextTransaction: PaymentTransaction = {
-        ...transaction,
-        service_order: transaction.service_order ?? order,
-      }
-
-      onOrderCreated?.({ order, transaction: nextTransaction })
-      setReviewState(null)
-      setCheckoutState({
-        gateway,
-        order,
-        transaction: nextTransaction,
-      })
-
-      addToast({
-        tone: 'success',
-        title: 'Pedido criado',
-        description:
-          method === 'pix'
-            ? `${deliveryEstimate ? `Prazo estimado: ${deliveryEstimate.fullLabel}. ` : ''}Abrimos o Pix Stripe mockado com QR Code para você continuar.`
-            : `${deliveryEstimate ? `Prazo estimado: ${deliveryEstimate.fullLabel}. ` : ''}Abrimos o checkout Stripe mockado para você continuar.`,
-      })
-    } catch (error: unknown) {
-      addToast({
-        tone: 'error',
-        title: 'Não foi possível criar o pedido',
-        description: getApiErrorMessage(error, 'Tente novamente em instantes para abrir o pedido.'),
-      })
-    } finally {
-      setCreatingMethod(null)
-    }
+    return order
   }
 
   function handleSelectFamily(family: ServiceFamily) {
@@ -1259,7 +1466,7 @@ export function PricingBuilder({
     })
   }
 
-  function handleStartPayment(method: 'pix' | 'card') {
+  function handleStartPayment() {
     if (!canCheckout || !quote) {
       if (invalidLadder) {
         addToast({
@@ -1272,7 +1479,7 @@ export function PricingBuilder({
       return
     }
 
-    setReviewState({ method })
+    setIsPaymentWizardOpen(true)
   }
 
   return (
@@ -1737,7 +1944,7 @@ export function PricingBuilder({
 
                     <ToggleAddonCard
                       active={addons.streamOnline}
-                      badge="Gratis"
+                      badge="+10%"
                       helper="Solicite stream online durante a execucao do pedido."
                       label="Stream online"
                       onClick={() => updateAddons({ streamOnline: !addons.streamOnline })}
@@ -1826,21 +2033,11 @@ export function PricingBuilder({
                 <div className="pricing-summary-card__actions">
                   <button
                     className="primary-button primary-button--crimson"
-                    disabled={creatingMethod !== null}
-                    onClick={() => handleStartPayment('pix')}
+                    onClick={handleStartPayment}
                     type="button"
                   >
-                    {creatingMethod === 'pix' ? <Loader2 className="spin-icon" size={16} /> : <ShoppingCart size={16} />}
-                    Pagar com Pix
-                  </button>
-                  <button
-                    className="ghost-button"
-                    disabled={creatingMethod !== null}
-                    onClick={() => handleStartPayment('card')}
-                    type="button"
-                  >
-                    {creatingMethod === 'card' ? <Loader2 className="spin-icon" size={16} /> : <CreditCard size={16} />}
-                    Pagar no cartão
+                    <ShoppingCart size={16} />
+                    Prosseguir para o pagamento
                   </button>
                 </div>
               ) : null}
@@ -1904,31 +2101,91 @@ export function PricingBuilder({
         setQuery={setChampionQuery}
       />
 
-      <PaymentReviewModal
+      <PaymentWizardModal
         addonAmount={addonAmount}
         addonPercent={addonPercent}
+        createOrder={createOrderDraft}
         deliveryEstimateLabel={deliveryEstimate?.fullLabel ?? null}
         freeAddons={freeAddons}
-        isLoading={creatingMethod !== null}
-        method={reviewState?.method ?? null}
-        onClose={() => setReviewState(null)}
-        onConfirm={() => {
-          if (reviewState) {
-            void handleCreateOrder(reviewState.method)
-          }
-        }}
-        open={reviewState !== null}
+        onClose={() => setIsPaymentWizardOpen(false)}
+        onOrderCreated={onOrderCreated}
+        open={isPaymentWizardOpen}
         paidAddons={paidAddons}
         routeLabel={quote?.ladderText ?? modeMeta.label}
         serviceLabel={modeMeta.label}
         total={finalTotal}
       />
-
-      <PaymentGatewayModal
-        key={checkoutState?.transaction.id ?? 'payment-checkout'}
-        checkout={checkoutState}
-        onClose={() => setCheckoutState(null)}
-      />
     </section>
   )
+}
+
+const stripePaymentAppearance = {
+  theme: 'night' as const,
+  labels: 'above' as const,
+  variables: {
+    colorPrimary: '#e23a3a',
+    colorBackground: '#231f2b',
+    colorText: '#fff7f7',
+    colorDanger: '#ff7a7a',
+    colorTextSecondary: '#c8b9bc',
+    colorTextPlaceholder: '#8f858c',
+    fontFamily: 'Space Grotesk, Inter, system-ui, sans-serif',
+    fontSizeBase: '16px',
+    fontWeightNormal: '600',
+    spacingUnit: '5px',
+    borderRadius: '14px',
+    focusBoxShadow: '0 0 0 3px rgba(226, 58, 58, 0.24)',
+    focusOutline: 'none',
+  },
+  rules: {
+    '.Block': {
+      backgroundColor: 'rgba(255, 255, 255, 0.035)',
+      border: '1px solid rgba(255, 255, 255, 0.09)',
+      boxShadow: '0 18px 38px rgba(0, 0, 0, 0.2)',
+    },
+    '.BlockDivider': {
+      backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    },
+    '.Tab': {
+      backgroundColor: 'rgba(255, 255, 255, 0.04)',
+      border: '1px solid rgba(255, 255, 255, 0.08)',
+      color: '#d9ccd0',
+      borderRadius: '14px',
+    },
+    '.Tab:hover': {
+      color: '#fff7f7',
+      borderColor: 'rgba(226, 58, 58, 0.42)',
+    },
+    '.Tab--selected': {
+      backgroundColor: 'rgba(156, 17, 17, 0.32)',
+      borderColor: 'rgba(226, 58, 58, 0.72)',
+      color: '#fff7f7',
+      boxShadow: 'inset 0 0 0 1px rgba(255, 122, 122, 0.16)',
+    },
+    '.Label': {
+      color: '#fff0f0',
+      fontWeight: '800',
+      fontSize: '14px',
+      marginBottom: '8px',
+    },
+    '.Input': {
+      backgroundColor: 'rgba(255, 255, 255, 0.055)',
+      border: '1px solid rgba(255, 255, 255, 0.11)',
+      color: '#fff7f7',
+      boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 12px 28px rgba(0, 0, 0, 0.2)',
+      padding: '15px 16px',
+    },
+    '.Input:hover': {
+      borderColor: 'rgba(226, 58, 58, 0.44)',
+      backgroundColor: 'rgba(255, 255, 255, 0.075)',
+    },
+    '.Input:focus': {
+      borderColor: '#e23a3a',
+      boxShadow: '0 0 0 3px rgba(226, 58, 58, 0.24), 0 18px 38px rgba(0, 0, 0, 0.28)',
+    },
+    '.Error': {
+      color: '#ffd1d1',
+      fontWeight: '700',
+    },
+  },
 }

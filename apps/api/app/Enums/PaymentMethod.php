@@ -4,6 +4,7 @@ namespace App\Enums;
 
 enum PaymentMethod: string
 {
-    case Pix = 'pix';
-    case Card = 'card';
+    case Pix = 'PIX';
+    case CreditCard = 'CREDIT_CARD';
+    case DebitCard = 'DEBIT_CARD';
 }

@@ -13,6 +13,7 @@ import { EmailVerificationPage } from '@/pages/EmailVerificationPage'
 import { FinancePage } from '@/pages/FinancePage'
 import { ProfilePage } from '@/pages/ProfilePage'
 import { PurchasesPage } from '@/pages/PurchasesPage'
+import { PaymentResultPage } from '@/pages/PaymentResultPage'
 import { SystemDashboardPage } from '@/pages/SystemDashboardPage'
 import { TournamentsPage } from '@/pages/TournamentsPage'
 import { authService } from '@/services/auth'
@@ -148,6 +149,46 @@ function App() {
             </ProtectedRoute>
           }
           path="/purchases"
+        />
+        <Route
+          element={
+            <ProtectedRoute roles={['customer']}>
+              <PurchasesPage />
+            </ProtectedRoute>
+          }
+          path="/orders"
+        />
+        <Route
+          element={
+            <ProtectedRoute roles={['customer']}>
+              <PaymentResultPage kind="success" />
+            </ProtectedRoute>
+          }
+          path="/payment/success"
+        />
+        <Route
+          element={
+            <ProtectedRoute roles={['customer']}>
+              <PaymentResultPage kind="cancel" />
+            </ProtectedRoute>
+          }
+          path="/payment/cancel"
+        />
+        <Route
+          element={
+            <ProtectedRoute roles={['customer']}>
+              <PaymentResultPage kind="pending" />
+            </ProtectedRoute>
+          }
+          path="/payment/pending"
+        />
+        <Route
+          element={
+            <ProtectedRoute roles={['customer']}>
+              <PaymentResultPage kind="processing" />
+            </ProtectedRoute>
+          }
+          path="/payment/processing"
         />
         <Route
           element={

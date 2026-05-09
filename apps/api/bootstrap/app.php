@@ -12,6 +12,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->api(prepend: [
+            \Illuminate\Http\Middleware\HandleCors::class,
+        ]);
+
         $middleware->alias([
             'auth.jwt' => \App\Http\Middleware\AuthenticateWithJwt::class,
             'permission' => \App\Http\Middleware\EnsureUserHasPermission::class,

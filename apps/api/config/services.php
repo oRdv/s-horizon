@@ -35,4 +35,18 @@ return [
         ],
     ],
 
+    'stripe' => [
+        'secret' => env('STRIPE_SECRET_KEY'),
+        'public' => env('STRIPE_PUBLIC_KEY'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        'ca_bundle' => env('PAYMENT_CA_BUNDLE'),
+    ],
+
+    'mercado_pago' => [
+        'public' => env('MERCADO_PAGO_PUBLIC_KEY'),
+        'access_token' => env('MERCADO_PAGO_ACCESS_TOKEN'),
+        'webhook_secret' => env('MERCADO_PAGO_WEBHOOK_SECRET'),
+        'ca_bundle' => env('PAYMENT_CA_BUNDLE'),
+    ],
+
 ];

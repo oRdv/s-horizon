@@ -32,23 +32,27 @@ import type {
 import { getRoleDashboardLabel, hasPermission } from '@/utils/authz'
 
 function formatCurrency(value: number | string) {
+  const numeric = Number(value)
+
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
     maximumFractionDigits: 0,
-  }).format(Number(value))
+  }).format(numeric > 999 ? numeric / 100 : numeric)
 }
 
 function formatPaymentMethod(method: PaymentTransaction['method']) {
-  return method === 'pix' ? 'Pix' : 'Cartao'
+  if (method === 'PIX' || method === 'pix') return 'Pix'
+  if (method === 'DEBIT_CARD') return 'Debito'
+  return 'Credito'
 }
 
 function formatPaymentProvider(provider: PaymentTransaction['provider']) {
-  if (provider === 'mercado_pago') {
+  if (provider === 'MERCADO_PAGO' || provider === 'mercado_pago') {
     return 'Mercado Pago'
   }
 
-  return provider === 'stripe' ? 'Stripe' : 'Manual'
+  return provider === 'STRIPE' || provider === 'stripe' ? 'Stripe' : 'Manual'
 }
 
 const landingBoosterRanks: Array<{ key: LandingBooster['rank_key']; label: string }> = [

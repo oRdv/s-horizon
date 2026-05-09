@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Enums\PaymentMethod;
 use App\Enums\UserRole;
 use App\Enums\WithdrawalStatus;
 use App\Http\Controllers\Controller;
@@ -46,7 +45,7 @@ class WithdrawalRequestController extends Controller
 
         $validated = $request->validate([
             'amount' => ['required', 'numeric', 'min:1'],
-            'method' => ['required', Rule::in([PaymentMethod::Pix->value, PaymentMethod::Card->value])],
+            'method' => ['required', Rule::in(['pix', 'card'])],
             'pix_key' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'metadata' => ['nullable', 'array'],

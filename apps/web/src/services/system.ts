@@ -9,6 +9,10 @@ import type {
   LandingBooster,
   PaymentTransaction,
   PaymentGatewayPayload,
+  PaymentMethod,
+  PaymentMethodsResponse,
+  OrderChatResponse,
+  OrderChatMessage,
   ServiceOrder,
   StaffDashboard,
   AdminTournamentRegistrationsResponse,
@@ -180,15 +184,64 @@ export const systemService = {
     title: string
     description?: string
     amount: number
-    provider: 'stripe' | 'mercado_pago'
-    method: 'pix' | 'card'
     metadata?: Record<string, unknown>
-  }): Promise<{ transaction: PaymentTransaction; order: ServiceOrder; gateway: PaymentGatewayPayload }> {
-    const response = await apiClient.post<
-      DashboardResponse<{ transaction: PaymentTransaction; order: ServiceOrder; gateway: PaymentGatewayPayload }>
-    >('/payments/customer', payload)
+  }): Promise<{ order: ServiceOrder }> {
+    const response = await apiClient.post<DashboardResponse<{ order: ServiceOrder }>>('/payments/customer', payload)
 
     return response.data.data
+  },
+
+  async getPaymentMethods(boostId: number): Promise<PaymentMethodsResponse> {
+    const response = await apiClient.get<DashboardResponse<PaymentMethodsResponse>>(`/payments/methods/${boostId}`)
+
+    return response.data.data
+  },
+
+  async createPayment(payload: {
+    boostId: number
+    orderId: number
+    method: PaymentMethod
+    installments?: number
+  }): Promise<PaymentGatewayPayload & { payment: PaymentTransaction }> {
+    const response = await apiClient.post<DashboardResponse<PaymentGatewayPayload & { payment: PaymentTransaction }>>(
+      '/payments/create',
+      payload,
+    )
+
+    return response.data.data
+  },
+
+  async getPaymentStatus(paymentId: number): Promise<PaymentTransaction> {
+    const response = await apiClient.get<DashboardResponse<PaymentTransaction>>(`/payments/${paymentId}/status`)
+
+    return response.data.data
+  },
+
+  async getOrders(): Promise<ServiceOrder[]> {
+    const response = await apiClient.get<DashboardResponse<{ orders: ServiceOrder[] }>>('/orders')
+
+    return response.data.data.orders
+  },
+
+  async getOrder(orderId: number): Promise<ServiceOrder> {
+    const response = await apiClient.get<DashboardResponse<{ order: ServiceOrder }>>(`/orders/${orderId}`)
+
+    return response.data.data.order
+  },
+
+  async getOrderChat(orderId: number): Promise<OrderChatResponse> {
+    const response = await apiClient.get<DashboardResponse<OrderChatResponse>>(`/orders/${orderId}/chat`)
+
+    return response.data.data
+  },
+
+  async sendOrderChatMessage(orderId: number, body: string): Promise<OrderChatMessage> {
+    const response = await apiClient.post<DashboardResponse<{ message: OrderChatMessage }>>(
+      `/orders/${orderId}/chat/messages`,
+      { body },
+    )
+
+    return response.data.data.message
   },
 
   async claimBoosterOrder(orderId: number): Promise<ServiceOrder> {
