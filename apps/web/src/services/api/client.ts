@@ -16,8 +16,31 @@ const JSON_HEADERS = {
   'Content-Type': 'application/json',
 } as const
 
+const configuredApiUrl = import.meta.env.VITE_API_URL
+const invalidApiUrlValues = new Set(['', 'undefined', 'null'])
+
+function resolveApiBaseUrl(value: unknown): string {
+  if (typeof value !== 'string') {
+    return '/api'
+  }
+
+  const normalized = value.trim()
+
+  if (invalidApiUrlValues.has(normalized.toLowerCase()) || normalized.includes('api.boosthorizon.com')) {
+    return '/api'
+  }
+
+  return normalized.replace(/\/$/, '')
+}
+
+export const API_BASE_URL = resolveApiBaseUrl(configuredApiUrl)
+
+if (import.meta.env.DEV) {
+  console.debug('[api] baseURL', API_BASE_URL)
+}
+
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? '/api',
+  baseURL: API_BASE_URL,
   headers: JSON_HEADERS,
 })
 
@@ -90,7 +113,7 @@ async function performRefresh(): Promise<string | null> {
 
   try {
     const response = await axios.post<AuthResponse>(
-      '/api/auth/refresh',
+      `${API_BASE_URL}/auth/refresh`,
       {
         refresh_token: refreshToken,
       },

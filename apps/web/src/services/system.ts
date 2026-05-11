@@ -11,13 +11,11 @@ import type {
   PaymentGatewayPayload,
   PaymentMethod,
   PaymentMethodsResponse,
+  OrderConversation,
   OrderChatResponse,
   OrderChatMessage,
   ServiceOrder,
   StaffDashboard,
-  AdminTournamentRegistrationsResponse,
-  TournamentRegistration,
-  TournamentRosterPlayer,
   UsersResponse,
   WithdrawalRequest,
 } from '@/types/system'
@@ -235,6 +233,21 @@ export const systemService = {
     return response.data.data
   },
 
+  async getOrderConversation(orderId: number): Promise<OrderChatResponse> {
+    const response = await apiClient.get<DashboardResponse<OrderChatResponse>>(`/orders/${orderId}/conversation`)
+
+    return response.data.data
+  },
+
+  async getConversationMessages(conversationId: number): Promise<OrderChatMessage[]> {
+    const response = await apiClient.get<DashboardResponse<{ messages: { data: OrderChatMessage[] } }>>(
+      `/conversations/${conversationId}/messages`,
+      { params: { per_page: 200 } },
+    )
+
+    return response.data.data.messages.data
+  },
+
   async sendOrderChatMessage(orderId: number, body: string): Promise<OrderChatMessage> {
     const response = await apiClient.post<DashboardResponse<{ message: OrderChatMessage }>>(
       `/orders/${orderId}/chat/messages`,
@@ -242,6 +255,28 @@ export const systemService = {
     )
 
     return response.data.data.message
+  },
+
+  async sendConversationMessage(conversationId: number, message: string): Promise<OrderChatMessage> {
+    const response = await apiClient.post<DashboardResponse<{ message: OrderChatMessage }>>(
+      `/conversations/${conversationId}/messages`,
+      { message },
+    )
+
+    return response.data.data.message
+  },
+
+  async markConversationRead(conversationId: number): Promise<void> {
+    await apiClient.patch(`/conversations/${conversationId}/read`)
+  },
+
+  async pinConversationMessage(conversationId: number, messageId: number | null): Promise<OrderConversation> {
+    const response = await apiClient.patch<DashboardResponse<{ conversation: OrderConversation }>>(
+      `/conversations/${conversationId}/pin`,
+      { message_id: messageId },
+    )
+
+    return response.data.data.conversation
   },
 
   async claimBoosterOrder(orderId: number): Promise<ServiceOrder> {
@@ -276,59 +311,6 @@ export const systemService = {
     )
 
     return response.data.data.withdrawal
-  },
-
-  async getTournamentRegistrations(): Promise<TournamentRegistration[]> {
-    const response = await apiClient.get<DashboardResponse<{ registrations: { data: TournamentRegistration[] } }>>(
-      '/tournament-registrations',
-    )
-
-    return response.data.data.registrations.data
-  },
-
-  async submitTournamentRegistration(payload: {
-    game: 'lol' | 'wild_rift'
-    category_id: string
-    team_name: string
-    team_tag: string
-    captain_name: string
-    captain_email: string
-    captain_phone?: string
-    captain_discord: string
-    server: string
-    team_discord?: string
-    how_found?: string
-    roster: TournamentRosterPlayer[]
-    notes?: string
-    accepted_rules: boolean
-    accepted_check_in: boolean
-  }): Promise<TournamentRegistration> {
-    const response = await apiClient.post<DashboardResponse<{ registration: TournamentRegistration }>>(
-      '/tournament-registrations',
-      payload,
-    )
-
-    return response.data.data.registration
-  },
-
-  async getAdminTournamentRegistrations(params?: {
-    game?: 'lol' | 'wild_rift'
-    status?: string
-  }): Promise<AdminTournamentRegistrationsResponse> {
-    const response = await apiClient.get<DashboardResponse<AdminTournamentRegistrationsResponse>>(
-      '/admin/tournament-registrations',
-      { params },
-    )
-
-    return response.data.data
-  },
-
-  async getAdminTournamentRegistration(id: number): Promise<TournamentRegistration> {
-    const response = await apiClient.get<DashboardResponse<{ registration: TournamentRegistration }>>(
-      `/admin/tournament-registrations/${id}`,
-    )
-
-    return response.data.data.registration
   },
 
   async requestProfileChange(payload: {

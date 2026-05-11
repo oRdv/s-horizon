@@ -11,7 +11,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'service_order_id',
     'customer_id',
     'booster_id',
+    'status',
     'opened_at',
+    'last_message',
+    'last_message_at',
+    'pinned_message_id',
 ])]
 class OrderConversation extends Model
 {
@@ -19,6 +23,7 @@ class OrderConversation extends Model
     {
         return [
             'opened_at' => 'datetime',
+            'last_message_at' => 'datetime',
         ];
     }
 
@@ -40,5 +45,10 @@ class OrderConversation extends Model
     public function messages(): HasMany
     {
         return $this->hasMany(OrderChatMessage::class)->latest();
+    }
+
+    public function pinnedMessage(): BelongsTo
+    {
+        return $this->belongsTo(OrderChatMessage::class, 'pinned_message_id');
     }
 }

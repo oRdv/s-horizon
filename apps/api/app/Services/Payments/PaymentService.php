@@ -9,6 +9,7 @@ use App\Enums\ServiceOrderStatus;
 use App\Models\Payment;
 use App\Models\ServiceOrder;
 use App\Models\User;
+use App\Services\Orders\OrderChatService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use InvalidArgumentException;
@@ -160,6 +161,10 @@ final class PaymentService
                 'final_price' => $payment->final_amount,
             ])->save();
         });
+
+        if ($payment->serviceOrder?->booster_id) {
+            app(OrderChatService::class)->ensureConversation($payment->serviceOrder->refresh());
+        }
 
         return $payment->refresh();
     }

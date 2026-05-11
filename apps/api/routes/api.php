@@ -10,7 +10,6 @@ use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\SecurityController;
 use App\Http\Controllers\Api\ServiceOrderController;
-use App\Http\Controllers\Api\TournamentRegistrationController;
 use App\Http\Controllers\Api\UserManagementController;
 use App\Http\Controllers\Api\WithdrawalRequestController;
 use Illuminate\Support\Facades\Route;
@@ -75,13 +74,6 @@ Route::middleware('auth.jwt')->group(function (): void {
             ->middleware('permission:users.manage');
     });
 
-    Route::prefix('admin/tournament-registrations')
-        ->middleware('permission:tournaments.view_all')
-        ->group(function (): void {
-            Route::get('/', [TournamentRegistrationController::class, 'adminIndex']);
-            Route::get('/{tournamentRegistration}', [TournamentRegistrationController::class, 'adminShow']);
-        });
-
     Route::prefix('profile')->group(function (): void {
         Route::get('/', [ProfileController::class, 'show']);
         Route::post('/change-requests', [ProfileController::class, 'requestChange']);
@@ -108,14 +100,17 @@ Route::middleware('auth.jwt')->group(function (): void {
     Route::prefix('orders')->group(function (): void {
         Route::get('/', [ServiceOrderController::class, 'index']);
         Route::get('/{serviceOrder}', [ServiceOrderController::class, 'show']);
+        Route::get('/{serviceOrder}/conversation', [OrderChatController::class, 'show']);
         Route::get('/{serviceOrder}/chat', [OrderChatController::class, 'show']);
         Route::post('/{serviceOrder}/chat/messages', [OrderChatController::class, 'store']);
         Route::post('/{serviceOrder}/claim', [ServiceOrderController::class, 'claim']);
     });
 
-    Route::prefix('tournament-registrations')->middleware('role:customer')->group(function (): void {
-        Route::get('/', [TournamentRegistrationController::class, 'index']);
-        Route::post('/', [TournamentRegistrationController::class, 'store']);
+    Route::prefix('conversations')->group(function (): void {
+        Route::get('/{conversation}/messages', [OrderChatController::class, 'messages']);
+        Route::post('/{conversation}/messages', [OrderChatController::class, 'storeForConversation']);
+        Route::patch('/{conversation}/read', [OrderChatController::class, 'read']);
+        Route::patch('/{conversation}/pin', [OrderChatController::class, 'pin']);
     });
 
     Route::prefix('withdrawals')->group(function (): void {

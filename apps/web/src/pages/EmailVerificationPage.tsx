@@ -163,7 +163,7 @@ export function EmailVerificationPage() {
             <h2>Confirme para liberar seu acesso</h2>
             <p>
               A gente envia um código para garantir que esse e-mail é seu. Depois da confirmação, seu painel,
-              pedidos e campeonatos ficam liberados com mais segurança.
+              seus pedidos ficam liberados com mais segurança.
             </p>
 
             <div className="email-verification-proof">

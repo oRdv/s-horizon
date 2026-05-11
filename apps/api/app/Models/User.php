@@ -127,8 +127,4 @@ class User extends Authenticatable
         return $this->hasMany(WithdrawalRequest::class, 'booster_id');
     }
 
-    public function tournamentRegistrations(): HasMany
-    {
-        return $this->hasMany(TournamentRegistration::class);
-    }
 }

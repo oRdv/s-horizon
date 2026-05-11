@@ -3,7 +3,6 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { ToastViewport } from '@/components/ToastViewport'
-import { AdminTournamentsPage } from '@/pages/AdminTournamentsPage'
 import { AdminUsersPage } from '@/pages/AdminUsersPage'
 import { BoosterApplicationPage } from '@/pages/BoosterApplicationPage'
 import { LandingPage } from '@/pages/LandingPage'
@@ -11,11 +10,11 @@ import { LoginPage } from '@/pages/LoginPage'
 import { SignupPage } from '@/pages/SignupPage'
 import { EmailVerificationPage } from '@/pages/EmailVerificationPage'
 import { FinancePage } from '@/pages/FinancePage'
+import { OrdersPage } from '@/pages/OrdersPage'
 import { ProfilePage } from '@/pages/ProfilePage'
 import { PurchasesPage } from '@/pages/PurchasesPage'
 import { PaymentResultPage } from '@/pages/PaymentResultPage'
 import { SystemDashboardPage } from '@/pages/SystemDashboardPage'
-import { TournamentsPage } from '@/pages/TournamentsPage'
 import { authService } from '@/services/auth'
 import { useSessionStore } from '@/store/useSessionStore'
 
@@ -109,14 +108,6 @@ function App() {
         />
         <Route
           element={
-            <ProtectedRoute permissions={['tournaments.view_all']}>
-              <AdminTournamentsPage />
-            </ProtectedRoute>
-          }
-          path="/admin/tournaments"
-        />
-        <Route
-          element={
             <ProtectedRoute
               permissions={[
                 'finance.control.view',
@@ -153,7 +144,7 @@ function App() {
         <Route
           element={
             <ProtectedRoute roles={['customer']}>
-              <PurchasesPage />
+              <OrdersPage />
             </ProtectedRoute>
           }
           path="/orders"
@@ -189,14 +180,6 @@ function App() {
             </ProtectedRoute>
           }
           path="/payment/processing"
-        />
-        <Route
-          element={
-            <ProtectedRoute roles={['customer']}>
-              <TournamentsPage />
-            </ProtectedRoute>
-          }
-          path="/tournaments"
         />
       </Routes>
       <ToastViewport />

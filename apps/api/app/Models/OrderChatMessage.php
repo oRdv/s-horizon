@@ -9,7 +9,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'order_conversation_id',
     'sender_id',
+    'sender_type',
     'body',
+    'is_read',
     'read_at',
 ])]
 class OrderChatMessage extends Model
@@ -17,6 +19,7 @@ class OrderChatMessage extends Model
     protected function casts(): array
     {
         return [
+            'is_read' => 'boolean',
             'read_at' => 'datetime',
         ];
     }

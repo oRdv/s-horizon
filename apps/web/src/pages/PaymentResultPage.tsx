@@ -40,7 +40,7 @@ export function PaymentResultPage({ kind }: { kind: 'success' | 'cancel' | 'proc
         }
       } catch (requestError: unknown) {
         if (active) {
-          setError(getApiErrorMessage(requestError, 'Nao foi possivel consultar o status real do pagamento.'))
+          setError(getApiErrorMessage(requestError, 'Não foi possível consultar o pagamento agora.'))
         }
       } finally {
         if (active) {
@@ -92,11 +92,11 @@ export function PaymentResultPage({ kind }: { kind: 'success' | 'cancel' | 'proc
         {error ? <p>{error}</p> : null}
         {payment ? (
           <p>
-            Status real: {payment.status} · Valor: {formatCurrencyFromCents(payment.finalAmount ?? payment.amount)}
+            Pagamento: {payment.status} - Valor: {formatCurrencyFromCents(payment.finalAmount ?? payment.amount)}
           </p>
         ) : null}
-        <Link className="primary-button primary-button--crimson" to="/purchases">
-          Voltar para pedidos
+        <Link className="primary-button primary-button--crimson" to="/orders">
+          Ver meus pedidos
         </Link>
       </section>
     </AppShell>

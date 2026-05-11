@@ -102,56 +102,6 @@ class AuthFlowTest extends TestCase
         $this->assertDatabaseCount((new RefreshToken())->getTable(), 2);
     }
 
-    public function test_customer_can_submit_tournament_registration(): void
-    {
-        $customer = User::factory()->create([
-            'email' => 'cliente-campeonato@horizonboost.gg',
-            'password' => 'Horizon123!',
-            'role' => UserRole::Customer->value,
-            'is_active' => true,
-        ]);
-
-        $token = $this->loginToken($customer->email, 'Horizon123!');
-
-        $payload = [
-            'game' => 'lol',
-            'category_id' => 'lol-5v5',
-            'team_name' => 'Horizon Eclipse',
-            'team_tag' => 'HRZ',
-            'captain_name' => 'Capitao Horizon',
-            'captain_email' => 'captain@horizonboost.gg',
-            'captain_phone' => '(11) 99999-9999',
-            'captain_discord' => '@captain',
-            'server' => 'BR',
-            'team_discord' => 'https://discord.gg/horizon',
-            'how_found' => 'Discord',
-            'roster' => [
-                ['nick' => 'Top Horizon', 'riot_id' => 'Top#BR1', 'role' => 'Top', 'rank' => 'Diamante'],
-                ['nick' => 'Jg Horizon', 'riot_id' => 'Jg#BR1', 'role' => 'Jungle', 'rank' => 'Diamante'],
-                ['nick' => 'Mid Horizon', 'riot_id' => 'Mid#BR1', 'role' => 'Mid', 'rank' => 'Diamante'],
-                ['nick' => 'Adc Horizon', 'riot_id' => 'Adc#BR1', 'role' => 'ADC', 'rank' => 'Diamante'],
-                ['nick' => 'Sup Horizon', 'riot_id' => 'Sup#BR1', 'role' => 'Suporte', 'rank' => 'Diamante'],
-            ],
-            'notes' => 'Time disponivel a noite.',
-            'accepted_rules' => true,
-            'accepted_check_in' => true,
-        ];
-
-        $this->withHeader('Authorization', 'Bearer '.$token)
-            ->postJson('/api/tournament-registrations', $payload)
-            ->assertCreated()
-            ->assertJsonPath('data.registration.category_title', 'League of Legends 5v5')
-            ->assertJsonPath('data.registration.team_name', 'Horizon Eclipse');
-
-        $this->assertDatabaseHas('tournament_registrations', [
-            'user_id' => $customer->getKey(),
-            'game' => 'lol',
-            'category_id' => 'lol-5v5',
-            'team_name' => 'Horizon Eclipse',
-            'status' => 'pending',
-        ]);
-    }
-
     public function test_customer_cannot_access_withdrawals(): void
     {
         $customer = User::factory()->create([

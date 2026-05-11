@@ -22,7 +22,7 @@ final class MercadoPagoPaymentProvider
         }
 
         $dateOfExpiration = Carbon::now('America/Sao_Paulo')
-            ->addMinutes(10)
+            ->addMinutes(30)
             ->setTimezone('UTC')
             ->format('Y-m-d\TH:i:s.000\Z');
 
@@ -37,13 +37,15 @@ final class MercadoPagoPaymentProvider
             $transactionAmount = 1;
         }
 
+        $notificationUrl = $this->buildWebhookUrl();
+
         $payload = [
             'transaction_amount' => $transactionAmount,
             'description' => $payment->serviceOrder?->title ?? 'Horizon Boost',
             'payment_method_id' => 'pix',
             'external_reference' => (string) $payment->getKey(),
             'date_of_expiration' => $dateOfExpiration,
-            'notification_url' => rtrim((string) config('payments.backend_url'), '/').'/api/payments/mercado-pago/webhook',
+            'notification_url' => $notificationUrl,
             'payer' => [
                 'email' => $payment->customer_email,
             ],
@@ -56,7 +58,9 @@ final class MercadoPagoPaymentProvider
 
         Log::debug('payments.mercado_pago_request', [
             'payment_id' => $payment->getKey(),
+            'backend_url' => config('payments.backend_url'),
             'date_of_expiration' => $dateOfExpiration,
+            'notification_url' => $notificationUrl,
             'payload' => $payload,
         ]);
 
@@ -74,7 +78,7 @@ final class MercadoPagoPaymentProvider
                 'payment_id' => $payment->getKey(),
                 'payload' => $payload,
                 'status' => $response->status(),
-                'response' => $response->body(),
+                'response' => $response->json() ?? $response->body(),
             ]);
 
             throw new RuntimeException($response->json('message') ?? data_get($response->json(), 'cause.0.description') ?? 'Mercado Pago recusou a criacao do Pix.');
@@ -126,6 +130,72 @@ final class MercadoPagoPaymentProvider
         }
 
         return round($cents / 100, 2);
+    }
+
+    private function buildWebhookUrl(): string
+    {
+        $backendUrl = config('payments.backend_url');
+
+        if (! is_string($backendUrl)) {
+            $this->throwInvalidBackendUrl();
+        }
+
+        $backendUrl = rtrim(trim($backendUrl), '/');
+        $lowerBackendUrl = strtolower($backendUrl);
+
+        Log::debug('payments.mercado_pago_backend_url', [
+            'backend_url' => $backendUrl,
+            'environment' => app()->environment(),
+        ]);
+
+        if (
+            $backendUrl === ''
+            || str_contains($lowerBackendUrl, 'undefined')
+            || str_contains($lowerBackendUrl, 'null')
+            || ! preg_match('/^https?:\/\//i', $backendUrl)
+        ) {
+            $this->throwInvalidBackendUrl();
+        }
+
+        if (! filter_var($backendUrl, FILTER_VALIDATE_URL)) {
+            $this->throwInvalidBackendUrl();
+        }
+
+        $baseUrl = parse_url($backendUrl);
+        $host = $baseUrl['host'] ?? null;
+        $scheme = strtolower((string) ($baseUrl['scheme'] ?? ''));
+
+        if (! is_string($host) || trim($host) === '') {
+            $this->throwInvalidBackendUrl();
+        }
+
+        if (app()->environment('production') && $scheme !== 'https') {
+            $this->throwInvalidBackendUrl();
+        }
+
+        if (in_array(strtolower($host), ['localhost', '127.0.0.1', '0.0.0.0', '::1'], true)) {
+            $this->throwInvalidBackendUrl();
+        }
+
+        $notificationUrl = $backendUrl.'/api/payments/mercado-pago/webhook';
+
+        if (! filter_var($notificationUrl, FILTER_VALIDATE_URL)) {
+            $this->throwInvalidBackendUrl();
+        }
+
+        Log::debug('payments.mercado_pago_notification_url', [
+            'backend_url' => $backendUrl,
+            'notification_url' => $notificationUrl,
+        ]);
+
+        return $notificationUrl;
+    }
+
+    private function throwInvalidBackendUrl(): never
+    {
+        throw new PaymentConfigurationException(
+            'BACKEND_URL inválido. Configure uma URL pública HTTPS para receber webhooks do Mercado Pago.'
+        );
     }
 
     private function caBundle(): bool|string

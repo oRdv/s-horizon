@@ -14,7 +14,6 @@ enum Permission: string
     case ViewBoosterProgress = 'boosters.progress.view';
     case ViewOperationOrders = 'orders.operation.view';
     case ViewCustomerPurchases = 'orders.customer_purchases.view';
-    case ViewTournamentRegistrations = 'tournaments.view_all';
     case CreateCustomerPayments = 'payments.customer.create';
     case ViewPaymentHistory = 'payments.history.view';
     case ViewBoosterPayments = 'finance.booster_payments.view';
@@ -39,7 +38,6 @@ enum Permission: string
             self::ViewBoosterProgress => 'Visualizar progresso dos boosters',
             self::ViewOperationOrders => 'Acompanhar pedidos da operacao',
             self::ViewCustomerPurchases => 'Visualizar compras de clientes',
-            self::ViewTournamentRegistrations => 'Visualizar inscricoes de campeonatos',
             self::CreateCustomerPayments => 'Criar pagamentos de clientes',
             self::ViewPaymentHistory => 'Visualizar historico financeiro',
             self::ViewBoosterPayments => 'Acessar pagamentos de boosters',

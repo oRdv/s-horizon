@@ -127,7 +127,12 @@ class ServiceOrderController extends Controller
         return response()->json([
             'message' => 'Servico pego com sucesso.',
             'data' => [
-                'order' => $claimedOrder,
+                'order' => $this->serializeOrder($claimedOrder->loadMissing([
+                    'customer:id,name,email,role,profile_photo_path',
+                    'booster:id,name,email,role,profile_photo_path',
+                    'payments',
+                    'conversation',
+                ]), $chat),
             ],
         ]);
     }

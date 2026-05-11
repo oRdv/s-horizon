@@ -15,6 +15,8 @@ import {
 import { Link, useNavigate } from 'react-router-dom'
 
 import { AppShell } from '@/components/AppShell'
+import { ChatModal } from '@/components/chat/ChatModal'
+import { OrderChatButton } from '@/components/chat/OrderChatButton'
 import { getApiErrorMessage } from '@/services/api/errors'
 import { authService } from '@/services/auth'
 import { systemService, type LandingBoosterPayload, type RoleDashboard } from '@/services/system'
@@ -582,6 +584,7 @@ function BoosterDashboardView({ dashboard }: { dashboard: BoosterDashboard }) {
   const [assignedOrders, setAssignedOrders] = useState(dashboard.assigned_orders)
   const [progress, setProgress] = useState(dashboard.progress)
   const [claimingOrderId, setClaimingOrderId] = useState<number | null>(null)
+  const [chatOrder, setChatOrder] = useState<ServiceOrder | null>(null)
 
   async function handleClaimOrder(orderId: number) {
     setClaimingOrderId(orderId)
@@ -661,8 +664,11 @@ function BoosterDashboardView({ dashboard }: { dashboard: BoosterDashboard }) {
           {assignedOrders.length ? (
             assignedOrders.map((order) => (
               <div className="stack-list__item" key={order.id}>
-                <strong>{order.title}</strong>
-                <span>{order.status} · {formatCurrency(order.price)}</span>
+                <div>
+                  <strong>{order.title}</strong>
+                  <span>{order.status} · {formatCurrency(order.price)}</span>
+                </div>
+                <OrderChatButton onOpen={setChatOrder} order={{ ...order, chat_available: order.chat_available ?? true }} />
               </div>
             ))
           ) : (
@@ -670,6 +676,8 @@ function BoosterDashboardView({ dashboard }: { dashboard: BoosterDashboard }) {
           )}
         </div>
       </article>
+
+      {chatOrder ? <ChatModal order={chatOrder} onClose={() => setChatOrder(null)} /> : null}
     </>
   )
 }

@@ -45,29 +45,21 @@ export function AppShell({ userName, onLogout, children }: AppShellProps) {
               Usuários
             </NavLink>
           ) : null}
-          {hasPermission(user, 'tournaments.view_all') ? (
-            <NavLink
-              to="/admin/tournaments"
-              className={({ isActive }) => `dashboard-shell__nav-link${isActive ? ' is-active' : ''}`}
-            >
-              Campeonatos
-            </NavLink>
-          ) : null}
           {user?.role === 'customer' ? (
-            <NavLink
-              to="/purchases"
-              className={({ isActive }) => `dashboard-shell__nav-link${isActive ? ' is-active' : ''}`}
-            >
-              Preços e pedidos
-            </NavLink>
-          ) : null}
-          {user?.role === 'customer' ? (
-            <NavLink
-              to="/tournaments"
-              className={({ isActive }) => `dashboard-shell__nav-link${isActive ? ' is-active' : ''}`}
-            >
-              Campeonatos
-            </NavLink>
+            <>
+              <NavLink
+                to="/purchases"
+                className={({ isActive }) => `dashboard-shell__nav-link${isActive ? ' is-active' : ''}`}
+              >
+                Preços
+              </NavLink>
+              <NavLink
+                to="/orders"
+                className={({ isActive }) => `dashboard-shell__nav-link${isActive ? ' is-active' : ''}`}
+              >
+                Meus pedidos
+              </NavLink>
+            </>
           ) : null}
           {canSeeFinance ? (
             <NavLink to="/finance" className={({ isActive }) => `dashboard-shell__nav-link${isActive ? ' is-active' : ''}`}>

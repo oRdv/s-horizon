@@ -333,6 +333,7 @@ class PaymentController extends Controller
     {
         return [
             'id' => $payment->getKey(),
+            'paymentId' => $payment->getKey(),
             'userId' => $payment->user_id,
             'orderId' => $payment->order_id,
             'boostId' => $payment->boost_id,

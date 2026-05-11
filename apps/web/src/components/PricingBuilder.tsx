@@ -119,6 +119,23 @@ interface PaymentCheckoutState {
 }
 
 type PaymentWizardStep = 'summary' | 'method' | 'card' | 'pixConfirm' | 'pixQr' | 'status'
+type TerminalPaymentStatus = 'PAID' | 'FAILED' | 'EXPIRED' | 'REFUNDED' | 'CANCELLED'
+
+const terminalPaymentStatuses = new Set<string>(['PAID', 'FAILED', 'EXPIRED', 'REFUNDED', 'CANCELLED'])
+
+function normalizePixQrImageSource(qrCodeBase64?: string | null, generatedDataUrl?: string | null): string | null {
+  const trimmedBase64 = qrCodeBase64?.trim()
+
+  if (trimmedBase64) {
+    return trimmedBase64.startsWith('data:image') ? trimmedBase64 : `data:image/png;base64,${trimmedBase64}`
+  }
+
+  return generatedDataUrl ?? null
+}
+
+function isTerminalPaymentStatus(status?: string | null): status is TerminalPaymentStatus {
+  return Boolean(status && terminalPaymentStatuses.has(status))
+}
 
 const modeCards: ModeCard[] = [
   {
@@ -651,6 +668,7 @@ function PaymentWizardModal(props: {
   } = props
   const addToast = useToastStore((state) => state.addToast)
   const modalRef = useRef<HTMLElement | null>(null)
+  const createPaymentInFlightRef = useRef(false)
   const [step, setStep] = useState<PaymentWizardStep>('summary')
   const [order, setOrder] = useState<ServiceOrder | null>(null)
   const [methods, setMethods] = useState<PaymentMethodsResponse | null>(null)
@@ -662,6 +680,7 @@ function PaymentWizardModal(props: {
   const [status, setStatus] = useState<string | null>(null)
   const [isBusy, setIsBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pollingError, setPollingError] = useState<string | null>(null)
 
   const selectedOption = methods?.methods.find((method) => method.method === selectedMethod) ?? null
   const clientSecret = checkout?.gateway.clientSecret ?? null
@@ -670,6 +689,7 @@ function PaymentWizardModal(props: {
   const pixCopyPaste = checkout?.gateway.pixCopyPaste ?? null
   const qrCodePayload = checkout?.gateway.qrCode ?? pixCopyPaste
   const qrCodeBase64 = checkout?.gateway.qrCodeBase64 ?? null
+  const qrCodeImageSrc = normalizePixQrImageSource(qrCodeBase64, qrCodeDataUrl)
   const expiresAt = checkout?.gateway.expiresAt ?? checkout?.transaction.expiresAt ?? null
   const expiresAtMs = expiresAt ? new Date(expiresAt).getTime() : null
   const remainingMs = expiresAtMs ? Math.max(0, expiresAtMs - currentTime) : null
@@ -705,6 +725,8 @@ function PaymentWizardModal(props: {
       setQrCodeDataUrl(null)
       setStatus(null)
       setError(null)
+      setPollingError(null)
+      createPaymentInFlightRef.current = false
     }
   }, [open])
 
@@ -738,40 +760,85 @@ function PaymentWizardModal(props: {
 
     let active = true
     const paymentId = checkout.gateway.paymentId ?? checkout.transaction.id
+    const numericPaymentId = Number(paymentId)
+
+    if (!Number.isFinite(numericPaymentId) || numericPaymentId <= 0) {
+      if (import.meta.env.DEV) {
+        console.warn('[payments] polling skipped: invalid paymentId', paymentId)
+      }
+
+      return
+    }
 
     const poll = async () => {
       try {
-        const payment = await systemService.getPaymentStatus(Number(paymentId))
-        if (!active) return
-        setStatus(payment.status)
+        if (import.meta.env.DEV) {
+          console.debug('[payments] polling status', { paymentId: numericPaymentId })
+        }
 
-        if (['PAID', 'FAILED', 'EXPIRED', 'REFUNDED', 'CANCELLED'].includes(payment.status)) {
+        const payment = await systemService.getPaymentStatus(numericPaymentId)
+        if (!active) return
+        const nextStatus = payment.status
+
+        if (import.meta.env.DEV) {
+          console.debug('[payments] polling response', { paymentId: numericPaymentId, status: nextStatus, payment })
+        }
+
+        setPollingError(null)
+
+        if (!nextStatus) {
+          return
+        }
+
+        setStatus(nextStatus)
+        setCheckout((current) => (
+          current
+            ? {
+                ...current,
+                transaction: {
+                  ...current.transaction,
+                  ...payment,
+                  qrCode: current.transaction.qrCode ?? payment.qrCode,
+                  qrCodeBase64: current.transaction.qrCodeBase64 ?? payment.qrCodeBase64,
+                  pixCopyPaste: current.transaction.pixCopyPaste ?? payment.pixCopyPaste,
+                },
+              }
+            : current
+        ))
+
+        if (isTerminalPaymentStatus(nextStatus)) {
           setStep('status')
-          if (payment.status === 'PAID') {
+          if (nextStatus === 'PAID') {
             window.setTimeout(() => {
               window.location.href = '/orders'
             }, 2600)
           }
         }
-      } catch {
-        // polling failures do not alter provider state
+      } catch (requestError) {
+        if (!active) return
+        setPollingError('Não foi possível atualizar o status agora. Tentando novamente...')
+
+        if (import.meta.env.DEV) {
+          console.warn('[payments] polling failed; keeping PIX visible', { paymentId: numericPaymentId, requestError })
+        }
       }
     }
 
     void poll()
-    const interval = window.setInterval(() => void poll(), step === 'status' ? 3000 : 5000)
+    const interval = window.setInterval(() => void poll(), 3000)
 
     return () => {
       active = false
       window.clearInterval(interval)
     }
-  }, [checkout, step])
+  }, [checkout?.gateway.paymentId, checkout?.transaction.id, step])
 
   if (!open) return null
 
   async function proceedToMethods() {
     setIsBusy(true)
     setError(null)
+    setPollingError(null)
     setQrCodeDataUrl(null)
 
     try {
@@ -783,37 +850,67 @@ function PaymentWizardModal(props: {
       setSelectedMethod((current) => current ?? firstAvailable?.method ?? null)
       setStep('method')
     } catch (requestError: unknown) {
-      setError(getApiErrorMessage(requestError, 'Nao foi possivel preparar o pagamento.'))
+      setError(getApiErrorMessage(requestError, 'Não foi possível preparar o pagamento.'))
     } finally {
       setIsBusy(false)
     }
   }
 
   async function createProviderPayment(method: PaymentMethod, nextInstallments = 1) {
-    if (!order) return
+    if (!order || createPaymentInFlightRef.current) return
 
+    createPaymentInFlightRef.current = true
     setIsBusy(true)
     setError(null)
+    setPollingError(null)
 
     try {
+      if (import.meta.env.DEV) {
+        console.debug('[payments] create payment request', {
+          orderId: order.id,
+          boostId: order.id,
+          method,
+          installments: nextInstallments,
+        })
+      }
+
       const gateway = await systemService.createPayment({
         boostId: order.id,
         orderId: order.id,
         method,
         installments: nextInstallments,
       })
-      const transaction = {
-        ...gateway.payment,
-        service_order: gateway.payment.service_order ?? order,
+      const normalizedGateway: PaymentGatewayPayload & { payment: PaymentTransaction } = {
+        ...gateway,
+        paymentId: gateway.paymentId ?? gateway.payment.id,
+        status: gateway.status ?? gateway.payment.status,
+        qrCode: gateway.qrCode ?? gateway.payment.qrCode ?? null,
+        qrCodeBase64: gateway.qrCodeBase64 ?? gateway.payment.qrCodeBase64 ?? null,
+        pixCopyPaste: gateway.pixCopyPaste ?? gateway.payment.pixCopyPaste ?? null,
+        expiresAt: gateway.expiresAt ?? gateway.payment.expiresAt ?? null,
       }
-      setCheckout({ gateway, order, transaction })
-      setStatus(gateway.payment.status)
+      const transaction = {
+        ...normalizedGateway.payment,
+        service_order: normalizedGateway.payment.service_order ?? order,
+      }
+
+      if (import.meta.env.DEV) {
+        console.debug('[payments] create payment response', {
+          gateway: normalizedGateway,
+          paymentId: normalizedGateway.paymentId,
+          status: normalizedGateway.status,
+        })
+      }
+
+      setCheckout({ gateway: normalizedGateway, order, transaction })
+      setStatus(normalizedGateway.status ?? transaction.status ?? null)
       onOrderCreated?.({ order, transaction })
       setStep(method === 'PIX' ? 'pixQr' : 'card')
     } catch (requestError: unknown) {
-      setError(getApiErrorMessage(requestError, 'Nao foi possivel iniciar o pagamento.'))
+      setError(getApiErrorMessage(requestError, 'Não foi possível iniciar o pagamento.'))
     } finally {
       setIsBusy(false)
+      createPaymentInFlightRef.current = false
     }
   }
 
@@ -824,7 +921,7 @@ function PaymentWizardModal(props: {
       await navigator.clipboard.writeText(pixCopyPaste)
       addToast({ tone: 'success', title: 'Codigo copiado', description: 'Cole no app do banco para pagar.' })
     } catch {
-      addToast({ tone: 'error', title: 'Nao foi possivel copiar', description: 'Copie o codigo manualmente.' })
+      addToast({ tone: 'error', title: 'Não foi possível copiar', description: 'Copie o código manualmente.' })
     }
   }
 
@@ -832,6 +929,7 @@ function PaymentWizardModal(props: {
     setCheckout(null)
     setStatus(null)
     setQrCodeDataUrl(null)
+    setPollingError(null)
     setStep('pixConfirm')
   }
 
@@ -964,6 +1062,7 @@ function PaymentWizardModal(props: {
                       setInstallments(1)
                       setCheckout(null)
                       setStatus(null)
+                      setPollingError(null)
                     }}
                     type="button"
                   >
@@ -1003,8 +1102,8 @@ function PaymentWizardModal(props: {
         {step === 'pixQr' ? (
           <div className="payment-wizard__pix-layout">
             <div className="payment-wizard__qr-frame">
-              {qrCodeBase64 || qrCodeDataUrl ? (
-                <img alt="QR Code Pix do pedido" src={qrCodeBase64 ? `data:image/png;base64,${qrCodeBase64}` : qrCodeDataUrl ?? ''} />
+              {qrCodeImageSrc ? (
+                <img alt="QR Code Pix do pedido" src={qrCodeImageSrc} />
               ) : (
                 <QrCode size={44} />
               )}
@@ -1018,11 +1117,12 @@ function PaymentWizardModal(props: {
                 <span>Codigo PIX</span>
                 <textarea readOnly rows={5} value={pixCopyPaste ?? ''} />
               </label>
+              {pollingError ? <div className="payment-wizard__alert payment-wizard__alert--soft">{pollingError}</div> : null}
               <div className="payment-wizard__timer">
                 <span>Validade</span>
                 <strong>{remainingMs !== null ? formatCountdown(remainingMs) : formatDateTime(expiresAt) ?? 'Aguardando'}</strong>
               </div>
-              <button className="primary-button primary-button--crimson" onClick={() => void handleCopyPixCode()} type="button">
+              <button className="primary-button primary-button--crimson" disabled={!pixCopyPaste} onClick={() => void handleCopyPixCode()} type="button">
                 <Copy size={16} />
                 Copiar codigo PIX
               </button>
@@ -1082,7 +1182,7 @@ function PaymentWizardModal(props: {
                 />
               </Elements>
             ) : (
-              <div className="payment-wizard__alert payment-wizard__alert--error">Nao foi possivel iniciar o pagamento com cartao.</div>
+              <div className="payment-wizard__alert payment-wizard__alert--error">Não foi possível iniciar o pagamento com cartão.</div>
             )}
           </>
         ) : null}
@@ -1114,7 +1214,7 @@ function PaymentWizardModal(props: {
             ) : (
               <>
                 <strong>{renderStatusTitle()}</strong>
-                <span>O status exibido vem da confirmacao do backend.</span>
+                <span>Assim que o pagamento for confirmado, seu pedido entra na fila de atendimento.</span>
                 {status === 'EXPIRED' && selectedMethod === 'PIX' ? (
                   <button className="primary-button primary-button--crimson" onClick={handleGenerateNewPix} type="button">
                     <QrCode size={16} />
@@ -1330,7 +1430,7 @@ export function PricingBuilder({
 
   async function createOrderDraft(): Promise<ServiceOrder> {
     if (!canCheckout || !quote) {
-      throw new Error(invalidLadder ?? 'Pedido indisponivel para pagamento.')
+      throw new Error(invalidLadder ?? 'Pedido indisponível para pagamento.')
     }
 
     const titleText = isDivisionMode

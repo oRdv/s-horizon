@@ -115,24 +115,51 @@ export interface PaymentGatewayPayload {
 export interface OrderChatMessage {
   id: number
   order_conversation_id: number
+  conversationId?: number
   sender_id: number
+  senderId?: number
+  sender_type?: 'CLIENT' | 'BOOSTER' | 'ADMIN'
+  senderType?: 'CLIENT' | 'BOOSTER' | 'ADMIN'
   body: string
+  message?: string
+  is_read?: boolean
+  isRead?: boolean
   read_at?: string | null
+  readAt?: string | null
   created_at: string
+  createdAt?: string
   sender?: AuthUser | null
+}
+
+export interface OrderConversation {
+  id: number
+  orderId: number
+  service_order_id?: number
+  clientId: number
+  customer_id?: number
+  boosterId?: number | null
+  booster_id?: number | null
+  status: 'ACTIVE' | 'CLOSED' | 'BLOCKED'
+  lastMessage?: string | null
+  lastMessageAt?: string | null
+  pinnedMessageId?: number | null
+  pinned_message_id?: number | null
+  pinnedMessage?: OrderChatMessage | null
+  pinned_message?: OrderChatMessage | null
+  opened_at?: string | null
+  createdAt?: string | null
+  created_at?: string | null
+  updatedAt?: string | null
+  updated_at?: string | null
+  customer?: AuthUser | null
+  booster?: AuthUser | null
+  order?: ServiceOrder | null
 }
 
 export interface OrderChatResponse {
   available: boolean
-  conversation?: {
-    id: number
-    service_order_id: number
-    customer_id: number
-    booster_id?: number | null
-    opened_at?: string | null
-    customer?: AuthUser | null
-    booster?: AuthUser | null
-  }
+  message?: string
+  conversation?: OrderConversation
   messages: OrderChatMessage[]
 }
 
@@ -146,53 +173,6 @@ export interface WithdrawalRequest {
   rejection_reason?: string | null
   booster?: AuthUser | null
   reviewer?: AuthUser | null
-}
-
-export interface TournamentRosterPlayer {
-  nick: string
-  riot_id: string
-  role?: string | null
-  rank?: string | null
-  discord?: string | null
-}
-
-export interface TournamentRegistration {
-  id: number
-  user_id: number
-  game: 'lol' | 'wild_rift'
-  category_id: string
-  category_title: string
-  status: 'pending' | 'approved' | 'rejected' | 'checked_in'
-  team_name: string
-  team_tag: string
-  captain_name: string
-  captain_email: string
-  captain_phone?: string | null
-  captain_discord: string
-  server: string
-  team_discord?: string | null
-  how_found?: string | null
-  roster: TournamentRosterPlayer[]
-  notes?: string | null
-  accepted_rules: boolean
-  accepted_check_in: boolean
-  submitted_at: string
-  created_at: string
-  updated_at: string
-  user?: AuthUser | null
-}
-
-export interface AdminTournamentSummary {
-  total: number
-  teams: number
-  pending: number
-  lol: number
-  wild_rift: number
-}
-
-export interface AdminTournamentRegistrationsResponse {
-  summary: AdminTournamentSummary
-  registrations: Paginated<TournamentRegistration>
 }
 
 export interface BoosterApplication extends BoosterProfile {
