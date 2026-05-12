@@ -5,6 +5,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { ToastViewport } from '@/components/ToastViewport'
 import { AdminUsersPage } from '@/pages/AdminUsersPage'
 import { BoosterApplicationPage } from '@/pages/BoosterApplicationPage'
+import { BoosterOrdersPage } from '@/pages/BoosterOrdersPage'
 import { LandingPage } from '@/pages/LandingPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { SignupPage } from '@/pages/SignupPage'
@@ -148,6 +149,14 @@ function App() {
             </ProtectedRoute>
           }
           path="/orders"
+        />
+        <Route
+          element={
+            <ProtectedRoute roles={['booster']}>
+              <BoosterOrdersPage />
+            </ProtectedRoute>
+          }
+          path="/booster/orders"
         />
         <Route
           element={

@@ -28,10 +28,12 @@ export interface ServiceOrder {
   booster?: AuthUser | null
   created_at?: string
   updated_at?: string
+  completed_at?: string | null
   chat_available?: boolean
   conversation_id?: number | null
   latest_payment?: PaymentTransaction | null
   payments?: PaymentTransaction[]
+  has_game_account?: boolean
 }
 
 export type PaymentMethod = 'PIX' | 'CREDIT_CARD' | 'DEBIT_CARD'
@@ -60,6 +62,8 @@ export interface PaymentTransaction {
   pixCopyPaste?: string | null
   expiresAt?: string | null
   provider_reference?: string | null
+  created_at?: string | null
+  createdAt?: string | null
   service_order?: ServiceOrder | null
 }
 
@@ -171,6 +175,10 @@ export interface WithdrawalRequest {
   status: string
   notes?: string | null
   rejection_reason?: string | null
+  metadata?: Record<string, unknown> | null
+  requested_at?: string | null
+  created_at?: string | null
+  updated_at?: string | null
   booster?: AuthUser | null
   reviewer?: AuthUser | null
 }

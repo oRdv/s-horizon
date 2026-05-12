@@ -61,6 +61,14 @@ export function AppShell({ userName, onLogout, children }: AppShellProps) {
               </NavLink>
             </>
           ) : null}
+          {user?.role === 'booster' ? (
+            <NavLink
+              to="/booster/orders"
+              className={({ isActive }) => `dashboard-shell__nav-link${isActive ? ' is-active' : ''}`}
+            >
+              Meus serviços
+            </NavLink>
+          ) : null}
           {canSeeFinance ? (
             <NavLink to="/finance" className={({ isActive }) => `dashboard-shell__nav-link${isActive ? ' is-active' : ''}`}>
               Financeiro

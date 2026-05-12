@@ -227,6 +227,15 @@ export const systemService = {
     return response.data.data.order
   },
 
+  async saveOrderGameAccount(orderId: number, payload: { email: string; password: string }): Promise<ServiceOrder> {
+    const response = await apiClient.post<DashboardResponse<{ order: ServiceOrder }>>(
+      `/orders/${orderId}/game-account`,
+      payload,
+    )
+
+    return response.data.data.order
+  },
+
   async getOrderChat(orderId: number): Promise<OrderChatResponse> {
     const response = await apiClient.get<DashboardResponse<OrderChatResponse>>(`/orders/${orderId}/chat`)
 
@@ -285,6 +294,12 @@ export const systemService = {
     return response.data.data.order
   },
 
+  async completeBoosterOrder(orderId: number): Promise<ServiceOrder> {
+    const response = await apiClient.post<DashboardResponse<{ order: ServiceOrder }>>(`/orders/${orderId}/complete`)
+
+    return response.data.data.order
+  },
+
   async getWithdrawals(): Promise<WithdrawalRequest[]> {
     const response = await apiClient.get<DashboardResponse<{ withdrawals: { data: WithdrawalRequest[] } }>>(
       '/withdrawals',
@@ -294,10 +309,13 @@ export const systemService = {
   },
 
   async requestWithdrawal(payload: {
-    amount: number
+    amount?: number
+    service_order_id?: number
     method: 'pix' | 'card'
     pix_key?: string
+    bonus_amount?: number
     notes?: string
+    metadata?: Record<string, unknown>
   }): Promise<WithdrawalRequest> {
     const response = await apiClient.post<DashboardResponse<{ withdrawal: WithdrawalRequest }>>('/withdrawals', payload)
 

@@ -103,7 +103,9 @@ Route::middleware('auth.jwt')->group(function (): void {
         Route::get('/{serviceOrder}/conversation', [OrderChatController::class, 'show']);
         Route::get('/{serviceOrder}/chat', [OrderChatController::class, 'show']);
         Route::post('/{serviceOrder}/chat/messages', [OrderChatController::class, 'store']);
+        Route::post('/{serviceOrder}/game-account', [ServiceOrderController::class, 'storeGameAccount']);
         Route::post('/{serviceOrder}/claim', [ServiceOrderController::class, 'claim']);
+        Route::post('/{serviceOrder}/complete', [ServiceOrderController::class, 'complete']);
     });
 
     Route::prefix('conversations')->group(function (): void {

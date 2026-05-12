@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import {
+  ArrowRight,
   BadgeDollarSign,
   Banknote,
   ClipboardList,
   Pencil,
-  ShieldCheck,
   ShoppingBag,
   Target,
   Trash2,
@@ -15,8 +15,6 @@ import {
 import { Link, useNavigate } from 'react-router-dom'
 
 import { AppShell } from '@/components/AppShell'
-import { ChatModal } from '@/components/chat/ChatModal'
-import { OrderChatButton } from '@/components/chat/OrderChatButton'
 import { getApiErrorMessage } from '@/services/api/errors'
 import { authService } from '@/services/auth'
 import { systemService, type LandingBoosterPayload, type RoleDashboard } from '@/services/system'
@@ -130,6 +128,119 @@ function getOrderModeLabel(order: ServiceOrder) {
   return 'Serviço'
 }
 
+const boosterRankLabels: Record<string, string> = {
+  iron: 'Ferro',
+  bronze: 'Bronze',
+  silver: 'Prata',
+  gold: 'Ouro',
+  platinum: 'Platina',
+  emerald: 'Esmeralda',
+  diamond: 'Diamante',
+  master: 'Mestre',
+  grandmaster: 'Grão-mestre',
+  challenger: 'Desafiante',
+}
+
+function formatShortDateWithTime(value?: string | null) {
+  if (!value) return 'A definir'
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value))
+}
+
+function formatTime(value?: string | null) {
+  if (!value) return 'A definir'
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value))
+}
+
+function getDeliveryDeadline(order: ServiceOrder) {
+  const metadata = order.metadata ?? {}
+  const explicitDeadline = [
+    metadata.delivery_deadline_at,
+    metadata.delivery_deadline,
+    metadata.deadline_at,
+    metadata.due_at,
+  ].find((value) => typeof value === 'string' && value.length)
+
+  if (typeof explicitDeadline === 'string') {
+    return explicitDeadline
+  }
+
+  if (!order.created_at) {
+    return null
+  }
+
+  const fallbackDeadline = new Date(order.created_at)
+  fallbackDeadline.setDate(fallbackDeadline.getDate() + 1)
+
+  return fallbackDeadline.toISOString()
+}
+
+function getRankKey(value?: unknown) {
+  return typeof value === 'string' && value ? value.toLowerCase() : null
+}
+
+function getRankLabel(value?: unknown) {
+  const key = getRankKey(value)
+
+  return key ? boosterRankLabels[key] ?? String(value) : null
+}
+
+function getTierDivisionLabel(tier?: unknown, division?: unknown) {
+  const tierText = getRankLabel(tier)
+  const divisionText = typeof division === 'string' && division ? division : null
+
+  return [tierText, divisionText].filter(Boolean).join(' ') || null
+}
+
+function getOrderRoute(order: ServiceOrder) {
+  const metadata = order.metadata ?? {}
+  const current = getTierDivisionLabel(metadata.current_tier, metadata.current_division)
+  const target = getTierDivisionLabel(metadata.target_tier, metadata.target_division)
+  const summary = typeof metadata.quote_summary === 'string' ? metadata.quote_summary : null
+
+  return {
+    current: current || 'Conferir detalhes',
+    currentTier: metadata.current_tier,
+    target: target || summary || 'Conferir detalhes',
+    targetTier: metadata.target_tier,
+  }
+}
+
+function BoosterRankEmblem({ tier }: { tier?: unknown }) {
+  const key = getRankKey(tier)
+  const label = getRankLabel(tier) ?? 'Elo'
+
+  return (
+    <div className={`client-order-card__rank-icon${key ? ` is-${key}` : ''}`} aria-hidden="true">
+      {key ? (
+        <img
+          alt=""
+          onError={(event) => {
+            event.currentTarget.style.display = 'none'
+          }}
+          src={`/ranks/${key}.png`}
+        />
+      ) : null}
+      <span>{label.slice(0, 2).toUpperCase()}</span>
+    </div>
+  )
+}
+
+function getGoalProgress(current?: number, target?: number) {
+  if (!target || target <= 0) return 0
+
+  return Math.min(100, Math.round((Number(current ?? 0) / target) * 100))
+}
+
 export function SystemDashboardPage() {
   const navigate = useNavigate()
   const user = useSessionStore((state) => state.user)
@@ -195,23 +306,25 @@ export function SystemDashboardPage() {
   return (
     <AppShell onLogout={handleLogout} userName={user.name}>
       <div className="system-dashboard">
-        <section className="system-hero panel">
-          <div>
-            <span className="panel__eyebrow">{getRoleDashboardLabel(user.role)}</span>
-            <h1>Central Horizon Boost</h1>
-          </div>
+        {user.role !== 'booster' && user.role !== 'master_admin' ? (
+          <section className="system-hero panel">
+            <div>
+              <span className="panel__eyebrow">{getRoleDashboardLabel(user.role)}</span>
+              <h1>Central Horizon Boost</h1>
+            </div>
 
-          <div className="system-hero__actions">
-            {hasPermission(user, 'users.view_all') ? (
-              <Link className="primary-button" to="/admin/users">
-                Gerenciar usuarios
+            <div className="system-hero__actions">
+              {hasPermission(user, 'users.view_all') ? (
+                <Link className="primary-button" to="/admin/users">
+                  Gerenciar usuarios
+                </Link>
+              ) : null}
+              <Link className="ghost-button" to="/profile">
+                Seguranca da conta
               </Link>
-            ) : null}
-            <Link className="ghost-button" to="/profile">
-              Seguranca da conta
-            </Link>
-          </div>
-        </section>
+            </div>
+          </section>
+        ) : null}
 
         {user.role === 'master_admin' ? <MasterDashboardView dashboard={dashboard as MasterDashboard} /> : null}
         {user.role === 'staff' ? <StaffDashboardView dashboard={dashboard as StaffDashboard} /> : null}
@@ -336,45 +449,100 @@ function MasterDashboardView({ dashboard }: { dashboard: MasterDashboard }) {
     }
   }
 
+  const monthRevenue = Number(dashboard.global_goals.faturamento_atual_mes ?? 0)
+  const monthRevenueGoal = Number(dashboard.global_goals.meta_faturamento_mes ?? 0)
+  const monthOrders = Number(dashboard.global_goals.pedidos_abertos_mes ?? 0)
+  const monthOrdersGoal = Number(dashboard.global_goals.meta_pedidos_mes ?? 0)
+  const activeBoosters = Number(dashboard.global_goals.boosters_ativos ?? 0)
+  const activeBoostersGoal = Number(dashboard.global_goals.meta_boosters_ativos ?? 0)
+  const pendingWithdrawals = dashboard.summary.pending_withdrawals ?? dashboard.pending_withdrawal_requests.length
+  const operationalOrders = Number(dashboard.summary.total_orders ?? 0) - Number(dashboard.summary.pending_payments ?? 0)
+
   return (
     <>
-      <section className="system-card-grid">
-        <SummaryCard icon={Users} label="Clientes" value={dashboard.summary.total_clients} />
-        <SummaryCard icon={ShieldCheck} label="Boosters" value={dashboard.summary.total_boosters} />
-        <SummaryCard icon={ClipboardList} label="Staffs" value={dashboard.summary.total_staffs} />
-        <SummaryCard icon={ShoppingBag} label="Pedidos" value={dashboard.summary.total_orders} />
-        <SummaryCard icon={Banknote} label="Pagamentos pendentes" value={dashboard.summary.pending_payments} />
-        <SummaryCard icon={BadgeDollarSign} label="Total faturado" value={formatCurrency(dashboard.summary.total_revenue)} />
+      <section className="master-dashboard-hero panel">
+        <div className="master-dashboard-hero__copy">
+          <span className="panel__eyebrow">Master admin</span>
+          <h1>Visão geral da operação</h1>
+          <p>Receita, pedidos, saques e equipe em uma leitura rápida para decidir o próximo movimento.</p>
+        </div>
+        <div className="master-dashboard-hero__revenue">
+          <span>Faturamento total</span>
+          <strong>{formatCurrency(dashboard.summary.total_revenue)}</strong>
+          <small>{formatCurrency(monthRevenue)} neste mês</small>
+        </div>
       </section>
 
-      <section className="system-grid-two">
-        <article className="management-panel panel">
-          <span className="panel__eyebrow">Metas globais</span>
-          <h2>Operacao do mes</h2>
-          <div className="metric-list">
-            {Object.entries(dashboard.global_goals).length ? (
-              Object.entries(dashboard.global_goals).map(([key, value]) => (
-                <div key={key}>
-                  <span>{key.replaceAll('_', ' ')}</span>
-                  <strong>{value}</strong>
-                </div>
-              ))
-            ) : (
-              <p>Nenhuma meta global cadastrada ainda.</p>
-            )}
+      <section className="master-metric-grid">
+        <article className="master-metric-card is-primary">
+          <span>Pedidos totais</span>
+          <strong>{dashboard.summary.total_orders}</strong>
+          <small>{Math.max(operationalOrders, 0)} fora de pagamento pendente</small>
+        </article>
+        <article className="master-metric-card">
+          <span>Pagamentos pendentes</span>
+          <strong>{dashboard.summary.pending_payments}</strong>
+          <small>Aguardando confirmação</small>
+        </article>
+        <article className="master-metric-card">
+          <span>Saques pendentes</span>
+          <strong>{pendingWithdrawals}</strong>
+          <small>{dashboard.pending_withdrawal_requests.length} na fila de análise</small>
+        </article>
+        <article className="master-metric-card">
+          <span>Equipe ativa</span>
+          <strong>{dashboard.summary.total_boosters}</strong>
+          <small>{activeBoosters} boosters ativos</small>
+        </article>
+      </section>
+
+      <section className="master-dashboard-layout">
+        <article className="master-goals-panel panel">
+          <div className="master-panel-heading">
+            <span className="panel__eyebrow">Metas do mês</span>
+            <h2>Ritmo da operação</h2>
+          </div>
+
+          <div className="master-goal-list">
+            <div className="master-goal-item">
+              <div>
+                <span>Faturamento</span>
+                <strong>{formatCurrency(monthRevenue)} / {formatCurrency(monthRevenueGoal)}</strong>
+              </div>
+              <div className="master-goal-track"><span style={{ width: `${getGoalProgress(monthRevenue, monthRevenueGoal)}%` }} /></div>
+            </div>
+            <div className="master-goal-item">
+              <div>
+                <span>Pedidos no mês</span>
+                <strong>{monthOrders} / {monthOrdersGoal}</strong>
+              </div>
+              <div className="master-goal-track"><span style={{ width: `${getGoalProgress(monthOrders, monthOrdersGoal)}%` }} /></div>
+            </div>
+            <div className="master-goal-item">
+              <div>
+                <span>Boosters ativos</span>
+                <strong>{activeBoosters} / {activeBoostersGoal}</strong>
+              </div>
+              <div className="master-goal-track"><span style={{ width: `${getGoalProgress(activeBoosters, activeBoostersGoal)}%` }} /></div>
+            </div>
           </div>
         </article>
 
-        <article className="management-panel panel">
-          <span className="panel__eyebrow">Solicitacoes de pagamento</span>
-          <h2>Retiradas pendentes</h2>
-          <div className="stack-list">
+        <article className="master-action-panel panel">
+          <div className="master-panel-heading">
+            <span className="panel__eyebrow">Atenção</span>
+            <h2>Saques pendentes</h2>
+          </div>
+          <div className="master-withdrawal-list">
             {dashboard.pending_withdrawal_requests.length ? (
               dashboard.pending_withdrawal_requests.map((withdrawal) => (
-                <div className="stack-list__item" key={withdrawal.id}>
-                  <strong>{withdrawal.booster?.name ?? 'Booster'}</strong>
-                  <span>{formatCurrency(withdrawal.amount)} aguardando revisao</span>
-                </div>
+                <article className="master-withdrawal-item" key={withdrawal.id}>
+                  <div>
+                    <strong>{withdrawal.booster?.name ?? 'Booster'}</strong>
+                    <span>{withdrawal.booster?.email ?? 'Sem email'}</span>
+                  </div>
+                  <b>{formatCurrency(withdrawal.amount)}</b>
+                </article>
               ))
             ) : (
               <p>Nenhuma retirada pendente agora.</p>
@@ -581,28 +749,20 @@ function StaffDashboardView({ dashboard }: { dashboard: StaffDashboard }) {
 function BoosterDashboardView({ dashboard }: { dashboard: BoosterDashboard }) {
   const addToast = useToastStore((state) => state.addToast)
   const [availableOrders, setAvailableOrders] = useState(dashboard.available_orders)
-  const [assignedOrders, setAssignedOrders] = useState(dashboard.assigned_orders)
-  const [progress, setProgress] = useState(dashboard.progress)
   const [claimingOrderId, setClaimingOrderId] = useState<number | null>(null)
-  const [chatOrder, setChatOrder] = useState<ServiceOrder | null>(null)
 
   async function handleClaimOrder(orderId: number) {
     setClaimingOrderId(orderId)
 
     try {
-      const claimedOrder = await systemService.claimBoosterOrder(orderId)
+      await systemService.claimBoosterOrder(orderId)
 
       setAvailableOrders((current) => current.filter((order) => order.id !== orderId))
-      setAssignedOrders((current) => [claimedOrder, ...current.filter((order) => order.id !== claimedOrder.id)])
-      setProgress((current) => ({
-        ...current,
-        active_orders: current.active_orders + 1,
-      }))
 
       addToast({
         tone: 'success',
         title: 'Serviço pego',
-        description: 'O pedido saiu da fila e entrou no seu inventario.',
+        description: 'Ele já está em Meus serviços, com chat liberado para você e o cliente.',
       })
     } catch (error: unknown) {
       addToast({
@@ -616,69 +776,89 @@ function BoosterDashboardView({ dashboard }: { dashboard: BoosterDashboard }) {
   }
 
   return (
-    <>
-      <section className="system-card-grid">
-        <SummaryCard icon={ClipboardList} label="Pedidos ativos" value={progress.active_orders} />
-        <SummaryCard icon={Target} label="Pedidos concluidos" value={progress.completed_orders} />
-        <SummaryCard icon={BadgeDollarSign} label="Disponivel" value={formatCurrency(dashboard.earnings.available)} />
-        <SummaryCard icon={Banknote} label="Saques pendentes" value={formatCurrency(dashboard.earnings.pending_withdrawals)} />
-      </section>
-
-      <article className="management-panel panel">
-        <span className="panel__eyebrow">Fila disponivel</span>
-        <h2>Serviços livres para pegar</h2>
-
-        {availableOrders.length ? (
-          <div className="booster-queue-grid">
-            {availableOrders.map((order) => (
-              <article className="booster-queue-card" key={order.id}>
-                <span className="panel__eyebrow">Fila aberta</span>
-                <h3>{getOrderRouteLabel(order)}</h3>
-                <p>{getOrderModeLabel(order)} · {formatCurrency(order.price)}</p>
-
-                <div className="booster-queue-card__meta">
-                  <span>Cliente: {order.customer?.name ?? 'Cliente Horizon'}</span>
-                  <span>Status: {order.status}</span>
-                </div>
-
-                <button
-                  className="primary-button primary-button--crimson"
-                  disabled={claimingOrderId === order.id}
-                  onClick={() => void handleClaimOrder(order.id)}
-                  type="button"
-                >
-                  {claimingOrderId === order.id ? 'Pegando...' : 'Pegar serviço'}
-                </button>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p>Não existe serviço livre na fila agora.</p>
-        )}
-      </article>
-
-      <article className="management-panel panel">
-        <span className="panel__eyebrow">Meus serviços</span>
-        <h2>Pedidos atribuidos</h2>
-        <div className="stack-list">
-          {assignedOrders.length ? (
-            assignedOrders.map((order) => (
-              <div className="stack-list__item" key={order.id}>
-                <div>
-                  <strong>{order.title}</strong>
-                  <span>{order.status} · {formatCurrency(order.price)}</span>
-                </div>
-                <OrderChatButton onOpen={setChatOrder} order={{ ...order, chat_available: order.chat_available ?? true }} />
-              </div>
-            ))
-          ) : (
-            <p>Nenhum pedido atribuido ainda.</p>
-          )}
+    <article className="booster-queue-panel panel">
+      <div className="booster-queue-panel__header">
+        <div>
+          <span className="panel__eyebrow">Fila de serviços</span>
+          <h2>Serviços livres para pegar</h2>
+          <p>Escolha um pedido pago, assuma o serviço e acompanhe tudo em Meus serviços.</p>
         </div>
-      </article>
+        <Link className="ghost-button" to="/booster/orders">
+          Meus serviços
+          <ArrowRight size={16} />
+        </Link>
+      </div>
 
-      {chatOrder ? <ChatModal order={chatOrder} onClose={() => setChatOrder(null)} /> : null}
-    </>
+      {availableOrders.length ? (
+        <div className="booster-queue-grid">
+          {availableOrders.map((order) => {
+            const route = getOrderRoute(order)
+            const deadline = getDeliveryDeadline(order)
+
+            return (
+              <article className="booster-queue-card client-order-card" key={order.id}>
+                <div className="client-order-card__top">
+                  <div>
+                    <span>Pedido #{order.id}</span>
+                    <h3>{getOrderRouteLabel(order)}</h3>
+                  </div>
+                </div>
+
+                <div className="client-order-card__journey">
+                  <div className="client-order-card__rank">
+                    <BoosterRankEmblem tier={route.currentTier} />
+                    <span>Elo atual</span>
+                    <strong>{route.current}</strong>
+                  </div>
+                  <span className="client-order-card__arrow">para</span>
+                  <div className="client-order-card__rank">
+                    <BoosterRankEmblem tier={route.targetTier} />
+                    <span>Elo desejado</span>
+                    <strong>{route.target}</strong>
+                  </div>
+                </div>
+
+                <div className="client-order-card__meta">
+                  <div>
+                    <span>Cliente</span>
+                    <strong>{order.customer?.name ?? 'Cliente Horizon'}</strong>
+                  </div>
+                  <div>
+                    <span>Serviço</span>
+                    <strong>{getOrderModeLabel(order)}</strong>
+                  </div>
+                  <div>
+                    <span>Pedido às</span>
+                    <strong>{formatTime(order.created_at)}</strong>
+                  </div>
+                  <div>
+                    <span>Entrega</span>
+                    <strong>{formatShortDateWithTime(deadline)}</strong>
+                  </div>
+                </div>
+
+                <div className="booster-queue-card__footer">
+                  <button
+                    className="primary-button primary-button--crimson"
+                    disabled={claimingOrderId === order.id}
+                    onClick={() => void handleClaimOrder(order.id)}
+                    type="button"
+                  >
+                    {claimingOrderId === order.id ? 'Pegando...' : 'Pegar serviço'}
+                  </button>
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="empty-state empty-state--compact">
+          <ClipboardList size={52} />
+          <h3>Fila limpa por enquanto</h3>
+          <p>Assim que um pedido pago entrar na fila, ele aparece aqui para você pegar.</p>
+        </div>
+      )}
+    </article>
   )
 }
 
