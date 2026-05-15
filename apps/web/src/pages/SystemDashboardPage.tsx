@@ -5,11 +5,13 @@ import {
   BadgeDollarSign,
   Banknote,
   ClipboardList,
+  Download,
   Pencil,
   ShoppingBag,
   Target,
   Trash2,
   Users,
+  Wifi,
   type LucideIcon,
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -159,6 +161,20 @@ function formatTime(value?: string | null) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value))
+}
+
+function trackerStatusLabel(status?: string | null) {
+  const labels: Record<string, string> = {
+    ONLINE: 'Online',
+    OFFLINE: 'Offline',
+    CLIENT_OPEN: 'Client aberto',
+    IN_LOBBY: 'Em lobby',
+    IN_CHAMP_SELECT: 'Selecao de campeoes',
+    IN_GAME: 'Em partida',
+    GAME_ENDED: 'Partida finalizada',
+  }
+
+  return labels[status ?? ''] ?? 'Sem sinal'
 }
 
 function getDeliveryDeadline(order: ServiceOrder) {
@@ -551,6 +567,50 @@ function MasterDashboardView({ dashboard }: { dashboard: MasterDashboard }) {
         </article>
       </section>
 
+      <article className="management-panel panel tracker-live-panel">
+        <div className="master-panel-heading">
+          <span className="panel__eyebrow">Tracker desktop</span>
+          <h2>Boosters ao vivo</h2>
+        </div>
+        <div className="tracker-live-grid">
+          {dashboard.live_boosters?.length ? (
+            dashboard.live_boosters.map((session) => (
+              <article className="tracker-live-card" key={session.id}>
+                <div className="tracker-live-card__icon">
+                  <Wifi size={18} />
+                </div>
+                <div>
+                  <strong>{session.booster?.name ?? 'Booster'}</strong>
+                  <span>{session.order?.title ?? `Pedido #${session.order_id ?? '-'}`}</span>
+                </div>
+                <div>
+                  <b>{trackerStatusLabel(session.status)}</b>
+                  <small>
+                    {session.riot_account?.gameName
+                      ? `${session.riot_account.gameName}${session.riot_account.tagLine ? `#${session.riot_account.tagLine}` : ''}`
+                      : 'Conta nao detectada'}
+                  </small>
+                </div>
+                <div className="tracker-live-progress">
+                  <strong>{Math.round(Number(session.ranked_progress?.progressPercent ?? 0))}%</strong>
+                  <span>
+                    {session.ranked_progress?.snapshot?.tier
+                      ? `${session.ranked_progress.snapshot.tier} ${session.ranked_progress.snapshot.division ?? ''} - ${session.ranked_progress.snapshot.leaguePoints ?? 0} PDL`
+                      : 'Sem PDL'}
+                  </span>
+                  {typeof session.ranked_progress?.lpDelta === 'number' ? (
+                    <small>{session.ranked_progress.lpDelta >= 0 ? '+' : ''}{session.ranked_progress.lpDelta} PDL</small>
+                  ) : null}
+                </div>
+                <small>{session.last_heartbeat_at ? `Sinal ${formatTime(session.last_heartbeat_at)}` : 'Sem heartbeat'}</small>
+              </article>
+            ))
+          ) : (
+            <p>Nenhum booster com tracker ativo agora.</p>
+          )}
+        </div>
+      </article>
+
       <article className="management-panel panel landing-boosters-admin">
         <div className="form-panel-title">
           <div>
@@ -783,10 +843,16 @@ function BoosterDashboardView({ dashboard }: { dashboard: BoosterDashboard }) {
           <h2>Serviços livres para pegar</h2>
           <p>Escolha um pedido pago, assuma o serviço e acompanhe tudo em Meus serviços.</p>
         </div>
-        <Link className="ghost-button" to="/booster/orders">
-          Meus serviços
-          <ArrowRight size={16} />
-        </Link>
+        <div className="booster-queue-panel__actions">
+          <a className="primary-button primary-button--crimson" href="/downloads/horizon-boost-tracker-windows.zip" download>
+            <Download size={16} />
+            Baixar app PC
+          </a>
+          <Link className="ghost-button" to="/booster/orders">
+            Meus serviços
+            <ArrowRight size={16} />
+          </Link>
+        </div>
       </div>
 
       {availableOrders.length ? (

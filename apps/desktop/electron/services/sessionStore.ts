@@ -1,9 +1,10 @@
-import { app } from 'electron'
+import electronMain from 'electron/main'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import type { DesktopSession } from '../../shared/types.js'
 
+const { app } = electronMain
 export class SessionStore {
   private readonly filePath = path.join(app.getPath('userData'), 'horizon-boost-session.json')
 

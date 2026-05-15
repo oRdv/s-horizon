@@ -34,6 +34,57 @@ export interface ServiceOrder {
   latest_payment?: PaymentTransaction | null
   payments?: PaymentTransaction[]
   has_game_account?: boolean
+  tracker_status?: BoosterTrackerSession | null
+}
+
+export type BoosterTrackerStatus =
+  | 'ONLINE'
+  | 'OFFLINE'
+  | 'CLIENT_OPEN'
+  | 'IN_LOBBY'
+  | 'IN_CHAMP_SELECT'
+  | 'IN_GAME'
+  | 'GAME_ENDED'
+
+export interface BoosterTrackerSession {
+  id: number
+  booster_id?: number
+  order_id?: number
+  status: BoosterTrackerStatus
+  riot_account?: {
+    gameName?: string | null
+    tagLine?: string | null
+    summonerName?: string | null
+    region?: string | null
+  } | null
+  current_game?: {
+    gameId?: string | null
+    queueId?: number | null
+    championId?: number | null
+    startedAt?: string | null
+  } | null
+  ranked_progress?: {
+    snapshot?: {
+      tier?: string | null
+      division?: string | null
+      leaguePoints?: number | null
+      queueType?: string | null
+      wins?: number | null
+      losses?: number | null
+    } | null
+    lpDelta?: number | null
+    progressPercent?: number | null
+  } | null
+  last_heartbeat_at?: string | null
+  booster?: AuthUser | null
+  order?: ServiceOrder | null
+}
+
+export interface BoosterTrackerStatusResponse {
+  available: boolean
+  message?: string
+  session?: BoosterTrackerSession | null
+  matches?: Array<Record<string, unknown>>
 }
 
 export type PaymentMethod = 'PIX' | 'CREDIT_CARD' | 'DEBIT_CARD'
@@ -215,6 +266,7 @@ export interface MasterDashboard {
   pending_withdrawal_requests: WithdrawalRequest[]
   landing_boosters: LandingBooster[]
   booster_users: AuthUser[]
+  live_boosters?: BoosterTrackerSession[]
 }
 
 export interface StaffDashboard {

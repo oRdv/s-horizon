@@ -1,5 +1,5 @@
 export type GameKey = 'lol' | 'wild_rift' | 'tft'
-export type PriceMode = 'solo' | 'duo' | 'wins' | 'md5' | 'coaching'
+export type PriceMode = 'solo' | 'duo' | 'flex' | 'wins' | 'md5' | 'coaching'
 export type DivisionalRankTier = 'iron' | 'bronze' | 'silver' | 'gold' | 'platinum' | 'emerald' | 'diamond'
 export type ApexRankTier = 'master' | 'grandmaster' | 'challenger' | 'sovereign'
 export type RankTier = DivisionalRankTier | ApexRankTier
@@ -39,6 +39,10 @@ export interface BoostQuote {
   suggestedTotal: number
   divisionCount: number
   estimatedDays: number
+  estimatedDaysRange?: {
+    min: number
+    max: number
+  }
   summary: string
   ladderText: string
 }
@@ -264,6 +268,39 @@ const progressionIndexByKey = Object.fromEntries(
   rankedProgression.map((step, index) => [step.key, index]),
 ) as Record<string, number>
 
+const eloHighBoostStepPrices: Partial<Record<string, number>> = {
+  iron: 12,
+  bronze: 14,
+  silver: 19,
+  gold: 24,
+  platinum: 34,
+  emerald: 67,
+  'diamond-IV': 100,
+  'diamond-III': 109,
+  'diamond-II': 119,
+  'diamond-I': 139,
+  master: 1700,
+  grandmaster: 2500,
+}
+
+const eloHighQuoteDiscount = 50
+
+const eloHighBoostStepDays: Partial<Record<string, number>> = {
+  iron: 1,
+  bronze: 1,
+  silver: 1,
+  gold: 1,
+  platinum: 1,
+  emerald: 1,
+  'emerald-I': 2,
+  'diamond-IV': 2,
+  'diamond-III': 2,
+  'diamond-II': 2,
+  'diamond-I': 3,
+  master: 15,
+  grandmaster: 25,
+}
+
 export function getPriceRow(tier: RankTier) {
   return rowByTier[tier]
 }
@@ -314,12 +351,27 @@ function getProgressionIndex(tier: RankTier, division?: RankDivision) {
   return progressionIndexByKey[getProgressionKey(tier, division)] ?? -1
 }
 
+function getBoostEstimatedDays(startIndex: number, targetIndex: number) {
+  let estimatedDays = 0
+
+  for (let stepIndex = startIndex; stepIndex < targetIndex; stepIndex += 1) {
+    const step = rankedProgression[stepIndex]
+    estimatedDays += eloHighBoostStepDays[step.key] ?? eloHighBoostStepDays[step.tier] ?? 1
+  }
+
+  return Math.max(1, estimatedDays)
+}
+
+function getEloHighBoostStepPrice(step: ProgressionStep) {
+  return eloHighBoostStepPrices[step.key] ?? eloHighBoostStepPrices[step.tier] ?? getFixedPriceValue(getPriceRow(step.tier).solo)
+}
+
 function roundSuggested(min: number, max: number) {
   return Math.round((min + max) / 2)
 }
 
 export function createBoostQuote(input: {
-  mode: Extract<PriceMode, 'solo' | 'duo'>
+  mode: Extract<PriceMode, 'solo' | 'duo' | 'flex'>
   currentTier: RankTier
   currentDivision: RankDivision
   targetTier: RankTier
@@ -337,10 +389,13 @@ export function createBoostQuote(input: {
 
   for (let stepIndex = startIndex; stepIndex < targetIndex; stepIndex += 1) {
     const step = rankedProgression[stepIndex]
-    const range = getPriceRow(step.tier)[input.mode]
-    minTotal += range.min
-    maxTotal += range.max
+    const stepPrice = getEloHighBoostStepPrice(step)
+    minTotal += stepPrice
+    maxTotal += stepPrice
   }
+
+  minTotal = minTotal > eloHighQuoteDiscount ? minTotal - eloHighQuoteDiscount : minTotal
+  maxTotal = maxTotal > eloHighQuoteDiscount ? maxTotal - eloHighQuoteDiscount : maxTotal
 
   const divisionCount = targetIndex - startIndex
   const touchesApex = isApexTier(input.currentTier) || isApexTier(input.targetTier)
@@ -358,8 +413,8 @@ export function createBoostQuote(input: {
     maxTotal,
     suggestedTotal: roundSuggested(minTotal, maxTotal),
     divisionCount,
-    estimatedDays: divisionCount + 1,
-    summary: `${divisionCount} ${unitLabel} no ${input.mode === 'solo' ? 'solo boost' : 'duo boost'}`,
+    estimatedDays: getBoostEstimatedDays(startIndex, targetIndex),
+    summary: `${divisionCount} ${unitLabel} no ${input.mode === 'solo' ? 'solo boost' : input.mode === 'duo' ? 'duo boost' : 'flex boost'}`,
     ladderText,
   }
 }
@@ -409,6 +464,11 @@ export function getModeMeta(mode: PriceMode) {
       label: 'Duo Boost',
       serviceType: 'duo_boost_division',
       shortDescription: 'Você joga junto e o valor acompanha cada etapa da rota.',
+    },
+    flex: {
+      label: 'Flex Boost',
+      serviceType: 'flex_boost_division',
+      shortDescription: 'Subida na fila Flex com base nos valores de mercado ajustados.',
     },
     wins: {
       label: 'Wins',

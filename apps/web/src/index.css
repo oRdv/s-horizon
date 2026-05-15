@@ -5079,6 +5079,14 @@ p {
   padding: clamp(0.8rem, 2vw, 1.4rem) 0;
 }
 
+.boosters-section .section-title {
+  max-width: 900px;
+  font-size: clamp(1.45rem, 2.6vw, 2.5rem);
+  line-height: 1.12;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
 .section-heading--left {
   justify-items: start;
   text-align: left;
@@ -5829,6 +5837,60 @@ p {
   align-items: stretch;
 }
 
+.tracker-live-panel {
+  margin-top: 1rem;
+}
+
+.tracker-live-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.tracker-live-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(180px, 0.8fr) minmax(160px, 0.7fr) auto;
+  align-items: center;
+  gap: 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.tracker-live-card__icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: #ff4f55;
+  background: rgba(255, 79, 85, 0.12);
+}
+
+.tracker-live-card strong,
+.tracker-live-card b {
+  display: block;
+}
+
+.tracker-live-card span,
+.tracker-live-card small {
+  color: var(--text-muted);
+}
+
+.tracker-live-progress {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.tracker-live-progress strong {
+  color: var(--text);
+}
+
+.tracker-live-progress small {
+  color: #ff797d;
+}
+
 .master-goals-panel,
 .master-action-panel,
 .master-roles-panel {
@@ -6570,6 +6632,14 @@ p {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.booster-queue-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .booster-queue-panel__header > div {

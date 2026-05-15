@@ -1,45 +1,61 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import {
   Activity,
-  ArrowUpRight,
-  Radar,
+  ClipboardList,
+  Gauge,
+  LogOut,
+  Play,
+  RefreshCw,
   ShieldCheck,
+  Square,
+  Timer,
+  UserRound,
+  Wifi,
   WifiOff,
 } from 'lucide-react'
 
-import { SessionForm } from './components/SessionForm'
-import { SignalCard } from './components/SignalCard'
-import { StatePill } from './components/StatePill'
-import type { DesktopSession, MonitorState } from '../shared/types'
+import type { DesktopOrder, LcuSnapshot, LoginPayload, MonitorState, TrackerStatus } from '../shared/types'
+
+const heartbeatSeconds = Number(import.meta.env.VITE_TRACKER_HEARTBEAT_INTERVAL_SECONDS ?? 15)
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'https://horizonboost.gg/api'
 
 const initialState: MonitorState = {
   session: null,
   isAuthenticated: false,
   leagueClient: 'disconnected',
-  currentMatch: {
-    active: false,
-    gameTimeSeconds: 0,
-    gameMode: null,
-    mapName: null,
-    startedAt: null,
-    externalMatchId: null,
-  },
-  lastReport: null,
+  activeOrderId: null,
+  latestSnapshot: null,
+  lastHeartbeatAt: null,
   lastError: null,
 }
 
-function App() {
-  const [monitorState, setMonitorState] = useState<MonitorState>(initialState)
-  const [apiBaseUrl, setApiBaseUrl] = useState('http://127.0.0.1:8000')
-  const [accessToken, setAccessToken] = useState('')
-  const [refreshToken, setRefreshToken] = useState('')
-  const [isSaving, setIsSaving] = useState(false)
+const statusLabels: Record<TrackerStatus, string> = {
+  ONLINE: 'Online',
+  OFFLINE: 'Offline',
+  CLIENT_OPEN: 'Client aberto',
+  IN_LOBBY: 'Em lobby',
+  IN_CHAMP_SELECT: 'Selecao de campeoes',
+  IN_GAME: 'Em partida',
+  GAME_ENDED: 'Partida finalizada',
+}
 
-  function hydrateFormFromState(state: MonitorState) {
-    if (state.session?.apiBaseUrl) {
-      setApiBaseUrl((currentValue) => currentValue || state.session?.apiBaseUrl || '')
-    }
-  }
+function App() {
+  const [state, setState] = useState<MonitorState>(initialState)
+  const [orders, setOrders] = useState<DesktopOrder[]>([])
+  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null)
+  const [isTracking, setIsTracking] = useState(false)
+  const [isLoadingOrders, setIsLoadingOrders] = useState(false)
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
+  const [form, setForm] = useState<LoginPayload>({
+    apiBaseUrl,
+    email: 'raven.booster@horizonboost.gg',
+    password: 'Boost@12345',
+  })
+
+  const selectedOrder = useMemo(
+    () => orders.find((order) => order.id === selectedOrderId) ?? null,
+    [orders, selectedOrderId],
+  )
 
   useEffect(() => {
     if (!window.horizonBoostDesktop) {
@@ -48,26 +64,17 @@ function App() {
 
     let active = true
 
-    async function bootstrap() {
-      const state = await window.horizonBoostDesktop?.bootstrap()
-
-      if (!active || !state) {
-        return
+    void window.horizonBoostDesktop.bootstrap().then((bootstrapState) => {
+      if (!active) return
+      setState(bootstrapState)
+      if (bootstrapState.isAuthenticated) {
+        void loadOrders()
       }
-
-      hydrateFormFromState(state)
-      setMonitorState(state)
-    }
-
-    void bootstrap()
+    })
 
     const unsubscribe = window.horizonBoostDesktop.onStateChange((nextState) => {
-      if (!active) {
-        return
-      }
-
-      hydrateFormFromState(nextState)
-      setMonitorState(nextState)
+      if (!active) return
+      setState(nextState)
     })
 
     return () => {
@@ -76,220 +83,406 @@ function App() {
     }
   }, [])
 
-  const connectionLabel = useMemo(() => {
-    switch (monitorState.leagueClient) {
-      case 'in_match':
-        return 'Em partida'
-      case 'lcu_ready':
-        return 'LCU conectado'
-      default:
-        return 'Client desconectado'
+  useEffect(() => {
+    if (!isTracking || !selectedOrderId) {
+      return
     }
-  }, [monitorState.leagueClient])
 
-  const sessionTone = monitorState.isAuthenticated ? 'positive' : 'danger'
-  const clientTone =
-    monitorState.leagueClient === 'in_match'
-      ? 'positive'
-      : monitorState.leagueClient === 'lcu_ready'
-        ? 'neutral'
-        : 'danger'
+    void sendHeartbeat(selectedOrderId)
+    const timer = window.setInterval(() => {
+      void sendHeartbeat(selectedOrderId)
+    }, Math.max(5, heartbeatSeconds) * 1000)
 
-  async function handleSaveSession(session: DesktopSession) {
+    return () => window.clearInterval(timer)
+  }, [isTracking, selectedOrderId])
+
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
     if (!window.horizonBoostDesktop) {
       return
     }
 
-    setIsSaving(true)
+    setIsLoggingIn(true)
 
     try {
-      const nextState = await window.horizonBoostDesktop.saveSession(session)
-      hydrateFormFromState(nextState)
-      setMonitorState(nextState)
+      const nextState = await window.horizonBoostDesktop.login(form)
+      setState(nextState)
+      addLog(`Login autorizado para ${nextState.session?.user?.email ?? form.email}.`)
+      await loadOrders()
+    } catch (error) {
+      addLog(toErrorMessage(error))
     } finally {
-      setIsSaving(false)
+      setIsLoggingIn(false)
     }
   }
 
-  async function handleClearSession() {
+  async function loadOrders() {
     if (!window.horizonBoostDesktop) {
       return
     }
 
-    const nextState = await window.horizonBoostDesktop.clearSession()
-    setAccessToken('')
-    setRefreshToken('')
-    hydrateFormFromState(nextState)
-    setMonitorState(nextState)
+    setIsLoadingOrders(true)
+
+    try {
+      const nextOrders = await window.horizonBoostDesktop.getOrders()
+      setOrders(nextOrders)
+      setSelectedOrderId((current) => current ?? nextOrders[0]?.id ?? null)
+      addLog(`${nextOrders.length} pedido(s) atribuido(s) carregado(s).`)
+    } catch (error) {
+      addLog(toErrorMessage(error))
+    } finally {
+      setIsLoadingOrders(false)
+    }
+  }
+
+  async function sendHeartbeat(orderId: number) {
+    if (!window.horizonBoostDesktop) {
+      return
+    }
+
+    try {
+      const snapshot = await window.horizonBoostDesktop.lcuSnapshot()
+
+      await window.horizonBoostDesktop.heartbeat({
+        orderId,
+        status: snapshot.status,
+        riotAccount: snapshot.riotAccount,
+        currentGame: snapshot.currentGame,
+        rankedProgress: snapshot.rankedProgress,
+      })
+
+      addLog(`${statusLabels[snapshot.status]} sincronizado no pedido #${orderId}.`)
+    } catch (error) {
+      addLog(toErrorMessage(error))
+    }
+  }
+
+  async function handleLogout() {
+    if (!window.horizonBoostDesktop) {
+      return
+    }
+
+    setIsTracking(false)
+    setOrders([])
+    setSelectedOrderId(null)
+    setState(await window.horizonBoostDesktop.logout())
+  }
+
+  function addLog(message: string) {
+    const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    console.info(`[${time}] ${message}`)
+  }
+
+  if (!state.isAuthenticated) {
+    return (
+      <main className="tracker-shell tracker-shell--login">
+        <section className="login-card panel">
+          <div className="brand-mark">
+            <img alt="" src="/horizon-poro-transparent.png" />
+          </div>
+          <span className="eyebrow">Horizon Boost Tracker</span>
+          <h1>Login do booster</h1>
+          <p>Entre com sua conta da plataforma para ver os servicos atribuidos.</p>
+
+          <form className="login-form" onSubmit={handleLogin}>
+            <label className="field">
+              <span>Email</span>
+              <input
+                onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+                value={form.email}
+              />
+            </label>
+            <label className="field">
+              <span>Senha</span>
+              <input
+                onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
+                type="password"
+                value={form.password}
+              />
+            </label>
+            <button className="primary-button" disabled={isLoggingIn} type="submit">
+              <ShieldCheck size={18} />
+              {isLoggingIn ? 'Entrando...' : 'Entrar'}
+            </button>
+          </form>
+        </section>
+      </main>
+    )
   }
 
   return (
-    <div className="desktop-shell">
-      <header className="desktop-shell__header">
+    <main className="tracker-app">
+      <aside className="tracker-sidebar panel">
         <div className="brand-row">
-          <div className="brand-row__icon">
-            <img alt="" aria-hidden="true" src="/horizon-poro-transparent.png" />
+          <div className="brand-mark">
+            <img alt="" src="/horizon-poro-transparent.png" />
           </div>
-
           <div>
-            <span className="eyebrow">Desktop Monitor</span>
-            <h1>Horizon Boost</h1>
+            <span className="eyebrow">Tracker</span>
+            <strong>Horizon Boost</strong>
           </div>
         </div>
-      </header>
 
-      <section className="hero-panel panel">
-        <div className="hero-panel__copy">
-          <span className="eyebrow">Monitor local do League</span>
-          <h2>
-            Sessão por token com integração somente por endpoints locais do client.
-          </h2>
-          <p>
-            O app detecta partidas pelo LCU / liveclientdata e envia resultados ao
-            backend sem acessar memória.
-          </p>
-        </div>
+        <nav className="tracker-sidebar__nav" aria-label="Menu do tracker">
+          <a href="#pedidos" className="tracker-sidebar__link is-active">
+            <ClipboardList size={18} />
+            Pedidos
+          </a>
+          <a href="#sessao" className="tracker-sidebar__link">
+            <Gauge size={18} />
+            Sessao
+          </a>
+        </nav>
 
-        <div className="hero-panel__signals">
-          <StatePill label={monitorState.isAuthenticated ? 'Backend ativo' : 'Sem sessão'} tone={sessionTone} />
-          <StatePill label={connectionLabel} tone={clientTone} />
-        </div>
-      </section>
-
-      <section className="signals-grid">
-        <SignalCard
-          description={
-            monitorState.session?.apiBaseUrl
-              ? `Backend configurado em ${monitorState.session.apiBaseUrl}`
-              : 'Insira a URL do backend e o token para iniciar o envio de partidas.'
-          }
-          eyebrow="Sessão backend"
-          footer={
-            <StatePill
-              label={monitorState.isAuthenticated ? 'Autenticado' : 'Não autenticado'}
-              tone={sessionTone}
-            />
-          }
-          icon={ShieldCheck}
-          title={monitorState.isAuthenticated ? 'Pronto para sincronizar' : 'Configuracao pendente'}
-        />
-
-        <SignalCard
-          description={
-            monitorState.currentMatch.active
-              ? `Tempo atual ${formatDuration(monitorState.currentMatch.gameTimeSeconds)}`
-              : 'Aguardando inicio de partida no client.'
-          }
-          eyebrow="League client"
-          footer={<StatePill label={connectionLabel} tone={clientTone} />}
-          icon={monitorState.leagueClient === 'disconnected' ? WifiOff : Radar}
-          title={
-            monitorState.currentMatch.active
-              ? monitorState.currentMatch.gameMode ?? 'Partida detectada'
-              : 'Sem partida ativa'
-          }
-        />
-
-        <SignalCard
-          description={
-            monitorState.lastReport
-              ? `${monitorState.lastReport.result.toUpperCase()} em ${formatDuration(
-                  monitorState.lastReport.duration,
-                )}`
-              : 'Nenhuma partida enviada ainda.'
-          }
-          eyebrow="Ultimo envio"
-          footer={
-            monitorState.lastReport ? (
-              <StatePill
-                label={monitorState.lastReport.status === 'sent' ? 'Enviado' : 'Falhou'}
-                tone={monitorState.lastReport.status === 'sent' ? 'positive' : 'danger'}
-              />
-            ) : undefined
-          }
-          icon={Activity}
-          title={
-            monitorState.lastReport
-              ? new Date(monitorState.lastReport.sentAt).toLocaleString('pt-BR')
-              : 'Sem histórico'
-          }
-        />
-      </section>
-
-      <section className="desktop-grid">
-        <section className="panel form-panel">
-          <div className="form-panel__header">
-            <span className="eyebrow">Login por token</span>
-            <h3>Configurar conexão do desktop</h3>
-            <p>
-              Refresh token opcional para manter a sessão ativa sem precisar
-              colar um novo access token constantemente.
-            </p>
+        <div className="tracker-sidebar__footer">
+          <div>
+            <span>{state.session?.user?.name ?? 'Booster'}</span>
+            <strong>{state.session?.user?.email}</strong>
           </div>
+          <button className="icon-button" onClick={handleLogout} title="Sair" type="button">
+            <LogOut size={18} />
+          </button>
+        </div>
+      </aside>
 
-          <SessionForm
-            accessToken={accessToken}
-            apiBaseUrl={apiBaseUrl}
-            isSaving={isSaving}
-            onAccessTokenChange={setAccessToken}
-            onApiBaseUrlChange={setApiBaseUrl}
-            onClear={handleClearSession}
-            onRefreshTokenChange={setRefreshToken}
-            onSave={handleSaveSession}
-            refreshToken={refreshToken}
-          />
+      <div className="tracker-shell">
+        <section className="hero-panel panel">
+          <div>
+            <span className="eyebrow">Acompanhamento seguro</span>
+            <h1>Tracking de boost em tempo real</h1>
+            <p>Pedidos atribuidos, conta Riot detectada pelo LCU e heartbeat do status atual.</p>
+          </div>
+          <div className="hero-panel__status">
+            <span>{formatRiotAccount(state.latestSnapshot)}</span>
+          </div>
         </section>
 
-        <section className="panel trace-panel">
-          <div className="trace-panel__header">
-            <span className="eyebrow">Telemetria local</span>
-            <h3>Estado atual do monitor</h3>
-            <p>Visibilidade rapida para entender o que o desktop conseguiu detectar.</p>
+        <section className="tracker-grid">
+        <section className="panel orders-panel" id="pedidos">
+          <div className="section-header">
+            <div>
+              <span className="eyebrow">Meus servicos</span>
+              <h2>Pedidos atribuidos</h2>
+            </div>
+            <button className="ghost-button" disabled={isLoadingOrders} onClick={() => void loadOrders()} type="button">
+              <RefreshCw size={17} />
+              Atualizar
+            </button>
           </div>
 
-          <div className="trace-row">
-            <span>Partida ativa</span>
-            <strong>{monitorState.currentMatch.active ? 'Sim' : 'Não'}</strong>
+          <div className="order-list">
+            {orders.length === 0 ? (
+              <div className="empty-state">Nenhum pedido atribuido para este booster.</div>
+            ) : (
+              orders.map((order) => (
+                <button
+                  className={`order-card ${selectedOrderId === order.id ? 'order-card--active' : ''}`}
+                  key={order.id}
+                  onClick={() => setSelectedOrderId(order.id)}
+                  type="button"
+                >
+                  <div className="order-card__main">
+                    <span>Pedido #{order.id}</span>
+                    <strong>{formatOrderTitle(order)}</strong>
+                    <small>{order.customer?.name ?? 'Cliente'} · {order.status}</small>
+                  </div>
+                  <RankRoute order={order} />
+                </button>
+              ))
+            )}
           </div>
-          <div className="trace-row">
-            <span>Game mode</span>
-            <strong>{monitorState.currentMatch.gameMode ?? 'Aguardando'}</strong>
-          </div>
-          <div className="trace-row">
-            <span>Mapa</span>
-            <strong>{monitorState.currentMatch.mapName ?? 'Aguardando'}</strong>
-          </div>
-          <div className="trace-row">
-            <span>ID da partida</span>
-            <strong>{monitorState.currentMatch.externalMatchId ?? 'Indisponível'}</strong>
-          </div>
-          <div className="trace-row">
-            <span>Bridge Electron</span>
-            <strong>{window.horizonBoostDesktop ? 'Disponível' : 'Indisponível'}</strong>
-          </div>
-
-          {monitorState.lastError ? (
-            <div className="error-banner">
-              <ArrowUpRight size={14} strokeWidth={2} />
-              <span>{monitorState.lastError}</span>
-            </div>
-          ) : (
-            <div className="trace-footnote">
-              Somente endpoints locais do client sao utilizados. Nenhuma leitura de
-              memória é necessária.
-            </div>
-          )}
         </section>
-      </section>
+
+        <section className="panel active-panel" id="sessao">
+          <div className="section-header">
+            <div>
+              <span className="eyebrow">Sessao ativa</span>
+              <h2>{selectedOrder ? `Pedido #${selectedOrder.id}` : 'Selecione um pedido'}</h2>
+            </div>
+            <button
+              className={isTracking ? 'danger-button' : 'primary-button'}
+              disabled={!selectedOrder}
+              onClick={() => setIsTracking((current) => !current)}
+              type="button"
+            >
+              {isTracking ? <Square size={17} /> : <Play size={17} />}
+              {isTracking ? 'Parar' : 'Iniciar'}
+            </button>
+          </div>
+
+          <div className="signal-grid">
+            <Signal icon={state.leagueClient === 'connected' ? Wifi : WifiOff} label="League Client" value={state.leagueClient === 'connected' ? 'Aberto' : 'Fechado'} />
+            <Signal icon={Activity} label="Status" value={statusLabels[state.latestSnapshot?.status ?? 'OFFLINE']} />
+            <Signal icon={UserRound} label="Conta Riot" value={formatRiotAccount(state.latestSnapshot)} />
+            <Signal icon={Timer} label="Gameflow" value={state.latestSnapshot?.gameflowPhase ?? 'Aguardando'} />
+          </div>
+
+          <ProgressPanel order={selectedOrder} snapshot={state.latestSnapshot} />
+          {selectedOrder ? <OrderSummary order={selectedOrder} /> : null}
+        </section>
+
+        </section>
+      </div>
+    </main>
+  )
+}
+
+function Signal({ icon: Icon, label, value }: { icon: typeof Activity; label: string; value: string }) {
+  return (
+    <div className="signal-card">
+      <Icon size={20} />
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   )
 }
 
-function formatDuration(value: number) {
-  const minutes = Math.floor(value / 60)
-  const seconds = value % 60
+function ProgressPanel({ order, snapshot }: { order: DesktopOrder | null; snapshot: LcuSnapshot | null }) {
+  const ranked = snapshot?.rankedProgress
+  const progress = calculateProgressPercent(order, ranked)
+  const label = ranked?.tier && ranked?.division
+    ? `${rankName(ranked.tier)} ${ranked.division} - ${ranked.leaguePoints ?? 0} PDL`
+    : 'Aguardando ranked'
 
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+  return (
+    <div className="progress-panel">
+      <div className="progress-panel__top">
+        <div>
+          <span>Progresso da conta</span>
+          <strong>{label}</strong>
+        </div>
+        <b>{Math.round(progress)}%</b>
+      </div>
+      <div className="progress-track" aria-hidden="true">
+        <span style={{ width: `${progress}%` }} />
+      </div>
+      <small>{progress >= 90 ? 'Perto de finalizar' : 'Atualiza quando o League Client expõe o PDL pelo LCU'}</small>
+    </div>
+  )
+}
+
+function OrderSummary({ order }: { order: DesktopOrder }) {
+  return (
+    <div className="order-summary">
+      <div>
+        <span>Servico</span>
+        <strong>{order.title}</strong>
+      </div>
+      <div>
+        <span>Cliente</span>
+        <strong>{order.customer?.name ?? 'Cliente'}</strong>
+      </div>
+      <div>
+        <span>Status do pedido</span>
+        <strong>{order.status}</strong>
+      </div>
+      <RankRoute order={order} large />
+    </div>
+  )
+}
+
+function RankRoute({ order, large = false }: { order: DesktopOrder; large?: boolean }) {
+  const current = readMeta(order, ['current_rank', 'currentRank', 'eloAtual']) ?? 'Ouro IV'
+  const desired = readMeta(order, ['desired_rank', 'desiredRank', 'eloDesejado']) ?? 'Platina IV'
+
+  return (
+    <div className={`rank-route ${large ? 'rank-route--large' : ''}`}>
+      <RankIcon label={current} />
+      <span>{current}</span>
+      <i>para</i>
+      <RankIcon label={desired} />
+      <span>{desired}</span>
+    </div>
+  )
+}
+
+function RankIcon({ label }: { label: string }) {
+  const key = label.toLowerCase().split(' ')[0]
+
+  return <span className={`rank-icon rank-icon--${key}`}>{key.slice(0, 2).toUpperCase()}</span>
+}
+
+function calculateProgressPercent(order: DesktopOrder | null, ranked?: LcuSnapshot['rankedProgress']) {
+  if (!order || !ranked) return 0
+
+  const start = rankScore(readMeta(order, ['current_tier', 'current_rank', 'currentRank']), readMeta(order, ['current_division']), 0)
+  const target = rankScore(readMeta(order, ['target_tier', 'desired_rank', 'desiredRank']), readMeta(order, ['target_division']), 100)
+  const current = rankScore(ranked.tier, ranked.division, ranked.leaguePoints ?? 0)
+
+  if (target <= start) return 0
+
+  return Math.max(0, Math.min(100, ((current - start) / (target - start)) * 100))
+}
+
+function rankScore(tier?: string | null, division?: string | null, lp = 0) {
+  const tiers: Record<string, number> = {
+    iron: 0,
+    bronze: 1,
+    silver: 2,
+    gold: 3,
+    platinum: 4,
+    emerald: 5,
+    diamond: 6,
+    master: 7,
+    grandmaster: 8,
+    challenger: 9,
+  }
+  const divisions: Record<string, number> = { IV: 0, III: 1, II: 2, I: 3 }
+
+  return ((tiers[String(tier ?? '').toLowerCase()] ?? 0) * 400)
+    + ((divisions[String(division ?? '').toUpperCase()] ?? 0) * 100)
+    + Math.max(0, Math.min(100, Number(lp)))
+}
+
+function rankName(tier?: string | null) {
+  const labels: Record<string, string> = {
+    iron: 'Ferro',
+    bronze: 'Bronze',
+    silver: 'Prata',
+    gold: 'Ouro',
+    platinum: 'Platina',
+    emerald: 'Esmeralda',
+    diamond: 'Diamante',
+    master: 'Mestre',
+    grandmaster: 'Grao-mestre',
+    challenger: 'Desafiante',
+  }
+
+  return labels[String(tier ?? '').toLowerCase()] ?? tier ?? 'Elo'
+}
+
+function formatOrderTitle(order: DesktopOrder) {
+  const current = readMeta(order, ['current_rank', 'currentRank'])
+  const desired = readMeta(order, ['desired_rank', 'desiredRank'])
+
+  return current && desired ? `${current} -> ${desired}` : order.title
+}
+
+function readMeta(order: DesktopOrder, keys: string[]) {
+  for (const key of keys) {
+    const value = order.metadata?.[key]
+
+    if (typeof value === 'string' && value.trim() !== '') {
+      return value
+    }
+  }
+
+  return null
+}
+
+function formatRiotAccount(snapshot: LcuSnapshot | null) {
+  const riot = snapshot?.riotAccount
+
+  if (!riot) {
+    return 'Nao detectada'
+  }
+
+  return riot.tagLine ? `${riot.gameName ?? riot.summonerName}#${riot.tagLine}` : riot.summonerName ?? 'Detectada'
+}
+
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Falha inesperada.'
 }
 
 export default App

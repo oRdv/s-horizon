@@ -75,4 +75,14 @@ class ServiceOrder extends Model
     {
         return $this->hasOne(OrderConversation::class);
     }
+
+    public function latestTrackerSession(): HasOne
+    {
+        return $this->hasOne(BoosterTrackerSession::class)->latestOfMany('last_heartbeat_at');
+    }
+
+    public function trackedMatches(): HasMany
+    {
+        return $this->hasMany(TrackedMatch::class);
+    }
 }

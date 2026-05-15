@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BoosterApplicationController;
+use App\Http\Controllers\Api\BoosterTrackerController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\LandingBoosterController;
 use App\Http\Controllers\Api\MatchReportController;
@@ -102,6 +103,7 @@ Route::middleware('auth.jwt')->group(function (): void {
         Route::get('/{serviceOrder}', [ServiceOrderController::class, 'show']);
         Route::get('/{serviceOrder}/conversation', [OrderChatController::class, 'show']);
         Route::get('/{serviceOrder}/chat', [OrderChatController::class, 'show']);
+        Route::get('/{serviceOrder}/tracker', [BoosterTrackerController::class, 'orderStatus']);
         Route::post('/{serviceOrder}/chat/messages', [OrderChatController::class, 'store']);
         Route::post('/{serviceOrder}/game-account', [ServiceOrderController::class, 'storeGameAccount']);
         Route::post('/{serviceOrder}/claim', [ServiceOrderController::class, 'claim']);
@@ -123,4 +125,14 @@ Route::middleware('auth.jwt')->group(function (): void {
         Route::patch('/{withdrawalRequest}/review', [WithdrawalRequestController::class, 'review'])
             ->middleware('permission:finance.withdrawals.manage');
     });
+
+    Route::prefix('booster-tracker')->group(function (): void {
+        Route::post('/heartbeat', [BoosterTrackerController::class, 'heartbeat']);
+        Route::post('/link-riot-account', [BoosterTrackerController::class, 'linkRiotAccount']);
+        Route::get('/orders/{serviceOrder}/status', [BoosterTrackerController::class, 'orderStatus']);
+        Route::post('/match-finished', [BoosterTrackerController::class, 'matchFinished']);
+    });
+
+    Route::get('/admin/boosters/live', [BoosterTrackerController::class, 'adminLive'])
+        ->middleware('permission:users.view_all');
 });

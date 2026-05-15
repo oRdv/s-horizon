@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Models\PaymentTransaction;
 use App\Models\LandingBooster;
+use App\Models\BoosterTrackerSession;
 use App\Models\ServiceOrder;
 use App\Models\User;
 use App\Models\WithdrawalRequest;
@@ -72,6 +73,34 @@ class DashboardController extends Controller
                     ->where('role', UserRole::Booster->value)
                     ->orderBy('name')
                     ->get(['id', 'name', 'email', 'role']),
+                'live_boosters' => BoosterTrackerSession::query()
+                    ->with(['booster:id,name,email,role,profile_photo_path', 'serviceOrder:id,title,status'])
+                    ->latest('last_heartbeat_at')
+                    ->limit(12)
+                    ->get()
+                    ->map(fn (BoosterTrackerSession $session): array => [
+                        'id' => $session->getKey(),
+                        'status' => $session->status,
+                        'booster' => $session->booster,
+                        'order' => $session->serviceOrder,
+                        'riot_account' => [
+                            'gameName' => $session->game_name,
+                            'tagLine' => $session->tag_line,
+                            'summonerName' => $session->summoner_name,
+                            'region' => $session->region,
+                        ],
+                        'current_game' => [
+                            'gameId' => $session->current_game_id,
+                            'queueId' => $session->current_queue_id,
+                            'championId' => $session->current_champion_id,
+                        ],
+                        'ranked_progress' => [
+                            'snapshot' => $session->ranked_snapshot,
+                            'lpDelta' => $session->lp_delta,
+                            'progressPercent' => (float) $session->progress_percent,
+                        ],
+                        'last_heartbeat_at' => $session->last_heartbeat_at?->toIso8601String(),
+                    ]),
             ],
         ]);
     }

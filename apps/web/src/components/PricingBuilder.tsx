@@ -151,6 +151,12 @@ const modeCards: ModeCard[] = [
     icon: Sparkles,
   },
   {
+    mode: 'flex',
+    label: 'Flex Boost',
+    helper: 'Subida na fila Flex com preço ajustado.',
+    icon: TrendingUp,
+  },
+  {
     mode: 'wins',
     label: 'Wins',
     helper: 'Vitórias avulsas para um objetivo rápido.',
@@ -176,7 +182,7 @@ const familyCards: FamilyCard[] = [
     label: 'Boost por elo',
     helper: 'Subida completa entre dois pontos da ranked.',
     icon: TrendingUp,
-    modes: ['solo', 'duo'],
+    modes: ['solo', 'duo', 'flex'],
   },
   {
     family: 'packages',
@@ -317,6 +323,10 @@ function formatEstimatedDays(days: number) {
   return days === 1 ? '1 dia' : `${days} dias`
 }
 
+function formatEstimatedDaysRange(minDays: number, maxDays: number) {
+  return minDays === maxDays ? formatEstimatedDays(maxDays) : `${minDays} a ${maxDays} dias`
+}
+
 function formatEstimatedDeadline(days: number) {
   const deadline = new Date()
   deadline.setDate(deadline.getDate() + days)
@@ -359,6 +369,10 @@ function getReferenceRange(mode: PriceMode, tier: RankTier) {
     return row.duo
   }
 
+  if (mode === 'flex') {
+    return row.solo
+  }
+
   if (mode === 'wins') {
     return row.wins
   }
@@ -371,7 +385,7 @@ function getReferenceRange(mode: PriceMode, tier: RankTier) {
 }
 
 function getFamilyForMode(mode: PriceMode): ServiceFamily {
-  if (mode === 'solo' || mode === 'duo') {
+  if (mode === 'solo' || mode === 'duo' || mode === 'flex') {
     return 'boost'
   }
 
@@ -1267,7 +1281,7 @@ export function PricingBuilder({
   const builderSteps = isDivisionMode ? divisionSteps : defaultSteps
   const quote = isDivisionMode
     ? createBoostQuote({
-        mode: mode as Extract<PriceMode, 'solo' | 'duo'>,
+        mode: mode as Extract<PriceMode, 'solo' | 'duo' | 'flex'>,
         currentTier,
         currentDivision,
         targetTier,
@@ -1289,9 +1303,12 @@ export function PricingBuilder({
   const deliveryEstimate =
     isDivisionMode && quote && 'estimatedDays' in quote
       ? (() => {
-          const baseDays = quote.estimatedDays
-          const estimatedDays = addons.reduceDelivery ? Math.max(1, Math.ceil(baseDays * 0.8)) : baseDays
-          const durationLabel = formatEstimatedDays(estimatedDays)
+          const fixedRange = quote.estimatedDaysRange
+          const baseDays = fixedRange?.max ?? quote.estimatedDays
+          const estimatedDays = fixedRange ? baseDays : addons.reduceDelivery ? Math.max(1, Math.ceil(baseDays * 0.8)) : baseDays
+          const durationLabel = fixedRange
+            ? formatEstimatedDaysRange(fixedRange.min, fixedRange.max)
+            : formatEstimatedDays(estimatedDays)
           const deadlineLabel = formatEstimatedDeadline(estimatedDays)
 
           return {
@@ -1303,6 +1320,7 @@ export function PricingBuilder({
           }
         })()
       : null
+  const supportsReduceDelivery = !quote || !('estimatedDaysRange' in quote && quote.estimatedDaysRange)
   const currentRow = getPriceRow(isDivisionMode ? currentTier : unitTier)
   const targetRow = getPriceRow(isDivisionMode ? targetTier : unitTier)
   const supportsChampionSelector = isDivisionMode && game === 'lol'
@@ -1391,7 +1409,7 @@ export function PricingBuilder({
       entries.push({ key: 'reduce_kda', label: 'Reducao do KD', percent: 30 })
     }
 
-    if (addons.reduceDelivery) {
+    if (supportsReduceDelivery && addons.reduceDelivery) {
       entries.push({ key: 'reduce_delivery', label: 'Reducao no prazo de entrega', percent: 20 })
     }
 
@@ -1400,7 +1418,7 @@ export function PricingBuilder({
     }
 
     return entries
-  }, [addons, effectiveSuperRestriction, supportsReduceKda, supportsSoloOnly])
+  }, [addons, effectiveSuperRestriction, supportsReduceDelivery, supportsReduceKda, supportsSoloOnly])
 
   const freeAddons = useMemo(() => {
     const entries: string[] = []
@@ -2060,13 +2078,15 @@ export function PricingBuilder({
                       />
                     ) : null}
 
-                    <ToggleAddonCard
-                      active={addons.reduceDelivery}
-                      badge="+20%"
-                      helper="Diminua o prazo de entrega do serviço."
-                      label="Reducao no prazo"
-                      onClick={() => updateAddons({ reduceDelivery: !addons.reduceDelivery })}
-                    />
+                    {supportsReduceDelivery ? (
+                      <ToggleAddonCard
+                        active={addons.reduceDelivery}
+                        badge="+20%"
+                        helper="Diminua o prazo de entrega do serviço."
+                        label="Reducao no prazo"
+                        onClick={() => updateAddons({ reduceDelivery: !addons.reduceDelivery })}
+                      />
+                    ) : null}
 
                     {supportsSoloOnly ? (
                       <ToggleAddonCard

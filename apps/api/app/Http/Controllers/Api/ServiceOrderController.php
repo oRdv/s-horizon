@@ -28,6 +28,7 @@ class ServiceOrderController extends Controller
                 'booster:id,name,email,role,profile_photo_path',
                 'payments' => fn ($query) => $query->latest(),
                 'conversation',
+                'latestTrackerSession',
             ])
             ->latest();
 
@@ -57,6 +58,7 @@ class ServiceOrderController extends Controller
                     'booster:id,name,email,role,profile_photo_path',
                     'payments',
                     'conversation',
+                    'latestTrackerSession',
                 ]), $chat),
             ],
         ]);
@@ -133,6 +135,7 @@ class ServiceOrderController extends Controller
                     'booster:id,name,email,role,profile_photo_path',
                     'payments',
                     'conversation',
+                    'latestTrackerSession',
                 ]), $chat),
             ],
         ]);
@@ -186,6 +189,7 @@ class ServiceOrderController extends Controller
                     'booster:id,name,email,role,profile_photo_path',
                     'payments',
                     'conversation',
+                    'latestTrackerSession',
                 ]), $chat),
             ],
         ]);
@@ -231,6 +235,7 @@ class ServiceOrderController extends Controller
                     'booster:id,name,email,role,profile_photo_path',
                     'payments',
                     'conversation',
+                    'latestTrackerSession',
                 ]), $chat),
             ],
         ]);
@@ -268,6 +273,28 @@ class ServiceOrderController extends Controller
             'chat_available' => $chat->isChatAvailable($order),
             'conversation_id' => $order->conversation?->getKey(),
             'latest_payment' => $latestPayment,
+            'tracker_status' => $order->latestTrackerSession ? [
+                'id' => $order->latestTrackerSession->getKey(),
+                'status' => $order->latestTrackerSession->status,
+                'last_heartbeat_at' => $order->latestTrackerSession->last_heartbeat_at?->toIso8601String(),
+                'riot_account' => [
+                    'gameName' => $order->latestTrackerSession->game_name,
+                    'tagLine' => $order->latestTrackerSession->tag_line,
+                    'summonerName' => $order->latestTrackerSession->summoner_name,
+                    'region' => $order->latestTrackerSession->region,
+                ],
+                'current_game' => [
+                    'gameId' => $order->latestTrackerSession->current_game_id,
+                    'queueId' => $order->latestTrackerSession->current_queue_id,
+                    'championId' => $order->latestTrackerSession->current_champion_id,
+                    'startedAt' => $order->latestTrackerSession->started_at?->toIso8601String(),
+                ],
+                'ranked_progress' => [
+                    'snapshot' => $order->latestTrackerSession->ranked_snapshot,
+                    'lpDelta' => $order->latestTrackerSession->lp_delta,
+                    'progressPercent' => (float) $order->latestTrackerSession->progress_percent,
+                ],
+            ] : null,
         ];
     }
 }

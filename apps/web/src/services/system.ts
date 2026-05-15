@@ -3,6 +3,8 @@ import type { AuthUser, BoosterProfile, UserRole } from '@/types/auth'
 import type {
   BoosterDashboard,
   BoosterApplication,
+  BoosterTrackerSession,
+  BoosterTrackerStatusResponse,
   CustomerDashboard,
   DashboardResponse,
   MasterDashboard,
@@ -225,6 +227,22 @@ export const systemService = {
     const response = await apiClient.get<DashboardResponse<{ order: ServiceOrder }>>(`/orders/${orderId}`)
 
     return response.data.data.order
+  },
+
+  async getOrderTrackerStatus(orderId: number): Promise<BoosterTrackerStatusResponse> {
+    const response = await apiClient.get<DashboardResponse<BoosterTrackerStatusResponse>>(
+      `/booster-tracker/orders/${orderId}/status`,
+    )
+
+    return response.data.data
+  },
+
+  async getLiveBoosters(): Promise<BoosterTrackerSession[]> {
+    const response = await apiClient.get<DashboardResponse<{ boosters: BoosterTrackerSession[] }>>(
+      '/admin/boosters/live',
+    )
+
+    return response.data.data.boosters
   },
 
   async saveOrderGameAccount(orderId: number, payload: { email: string; password: string }): Promise<ServiceOrder> {

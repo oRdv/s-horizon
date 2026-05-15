@@ -1,6 +1,7 @@
-import { app } from 'electron';
+import electronMain from 'electron/main';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+const { app } = electronMain;
 export class SessionStore {
     filePath = path.join(app.getPath('userData'), 'horizon-boost-session.json');
     async load() {

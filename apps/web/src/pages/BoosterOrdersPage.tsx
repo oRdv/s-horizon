@@ -28,6 +28,7 @@ const rankLabels: Record<string, string> = {
 const serviceLabels: Record<string, string> = {
   solo_boost_division: 'Boost Solo - Divisão',
   duo_boost_division: 'Boost Duo - Divisão',
+  flex_boost_division: 'Boost Flex - Divisão',
   wins_by_rank: 'Vitórias por elo',
 }
 

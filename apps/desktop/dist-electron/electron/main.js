@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import electronMain from 'electron/main';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BackendReporter } from './services/backendReporter.js';
@@ -6,65 +6,35 @@ import { LcuMonitor } from './services/lcuMonitor.js';
 import { SessionStore } from './services/sessionStore.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const { app, BrowserWindow, ipcMain } = electronMain;
 let mainWindow = null;
 const sessionStore = new SessionStore();
-const baseState = {
+const lcuMonitor = new LcuMonitor();
+let currentState = {
     session: null,
     isAuthenticated: false,
     leagueClient: 'disconnected',
-    currentMatch: {
-        active: false,
-        gameTimeSeconds: 0,
-        gameMode: null,
-        mapName: null,
-        startedAt: null,
-        externalMatchId: null,
-    },
-    lastReport: null,
+    activeOrderId: null,
+    latestSnapshot: null,
+    lastHeartbeatAt: null,
     lastError: null,
 };
-let currentState = { ...baseState };
 const reporter = new BackendReporter(async (session) => {
     await sessionStore.save(session);
     updateState({
-        session: session ? { apiBaseUrl: session.apiBaseUrl } : null,
+        session: session ? { apiBaseUrl: session.apiBaseUrl, user: session.user } : null,
         isAuthenticated: Boolean(session?.accessToken),
     });
-});
-const monitor = new LcuMonitor({
-    onStateChange: ({ currentMatch, lastError, leagueClient }) => {
-        updateState({
-            currentMatch,
-            lastError,
-            leagueClient,
-        });
-    },
-    onMatchFinished: async (payload) => {
-        try {
-            await reporter.sendMatchReport(payload);
-            updateState({
-                lastReport: buildReportState(payload, 'sent'),
-                lastError: null,
-            });
-        }
-        catch (error) {
-            updateState({
-                lastReport: buildReportState(payload, 'failed', toErrorMessage(error)),
-                lastError: toErrorMessage(error),
-            });
-        }
-    },
 });
 app.whenReady().then(async () => {
     const storedSession = await sessionStore.load();
     reporter.setSession(storedSession);
     updateState({
-        session: storedSession ? { apiBaseUrl: storedSession.apiBaseUrl } : null,
+        session: storedSession ? { apiBaseUrl: storedSession.apiBaseUrl, user: storedSession.user } : null,
         isAuthenticated: Boolean(storedSession?.accessToken),
     });
     registerIpcHandlers();
     createWindow();
-    monitor.start();
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
             createWindow();
@@ -76,17 +46,14 @@ app.on('window-all-closed', () => {
         app.quit();
     }
 });
-app.on('before-quit', () => {
-    monitor.stop();
-});
 function createWindow() {
     mainWindow = new BrowserWindow({
-        width: 1240,
-        height: 820,
-        minWidth: 980,
-        minHeight: 680,
-        backgroundColor: '#050505',
-        title: 'Horizon Boost Desktop',
+        width: 1320,
+        height: 860,
+        minWidth: 1040,
+        minHeight: 720,
+        backgroundColor: '#050304',
+        title: 'Horizon Boost Tracker',
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
@@ -103,28 +70,46 @@ function createWindow() {
 }
 function registerIpcHandlers() {
     ipcMain.handle('horizon-boost:bootstrap', async () => currentState);
-    ipcMain.handle('horizon-boost:save-session', async (_event, session) => {
-        const normalizedSession = {
-            ...session,
-            apiBaseUrl: session.apiBaseUrl.replace(/\/+$/, ''),
-        };
-        await sessionStore.save(normalizedSession);
-        reporter.setSession(normalizedSession);
+    ipcMain.handle('horizon-boost:login', async (_event, payload) => {
+        const session = await reporter.login(payload);
         updateState({
-            session: { apiBaseUrl: normalizedSession.apiBaseUrl },
+            session: { apiBaseUrl: session.apiBaseUrl, user: session.user },
             isAuthenticated: true,
             lastError: null,
         });
         return currentState;
     });
-    ipcMain.handle('horizon-boost:clear-session', async () => {
-        await sessionStore.clear();
-        reporter.setSession(null);
+    ipcMain.handle('horizon-boost:logout', async () => {
+        await reporter.clear();
         updateState({
             session: null,
             isAuthenticated: false,
+            activeOrderId: null,
             lastError: null,
         });
+        return currentState;
+    });
+    ipcMain.handle('horizon-boost:get-orders', async () => reporter.getOrders());
+    ipcMain.handle('horizon-boost:lcu-snapshot', async () => {
+        const snapshot = await lcuMonitor.snapshot();
+        updateState({
+            latestSnapshot: snapshot,
+            leagueClient: snapshot.clientOpen ? 'connected' : 'disconnected',
+            lastError: snapshot.error,
+        });
+        return snapshot;
+    });
+    ipcMain.handle('horizon-boost:heartbeat', async (_event, payload) => {
+        await reporter.sendHeartbeat(payload);
+        updateState({
+            activeOrderId: payload.orderId,
+            lastHeartbeatAt: new Date().toISOString(),
+            lastError: null,
+        });
+        return currentState;
+    });
+    ipcMain.handle('horizon-boost:match-finished', async (_event, payload) => {
+        await reporter.sendMatchFinished(payload);
         return currentState;
     });
 }
@@ -134,22 +119,5 @@ function updateState(patch) {
         ...patch,
     };
     mainWindow?.webContents.send('horizon-boost:state-changed', currentState);
-}
-function buildReportState(payload, status, error) {
-    return {
-        status,
-        result: payload.result,
-        duration: payload.duration,
-        timestamp: payload.timestamp,
-        externalMatchId: payload.external_match_id ?? null,
-        sentAt: new Date().toISOString(),
-        error,
-    };
-}
-function toErrorMessage(error) {
-    if (error instanceof Error) {
-        return error.message;
-    }
-    return 'Falha desconhecida ao sincronizar a ultima partida.';
 }
 //# sourceMappingURL=main.js.map

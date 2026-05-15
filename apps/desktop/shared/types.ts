@@ -2,44 +2,121 @@ export interface DesktopSession {
   apiBaseUrl: string
   accessToken: string
   refreshToken?: string
+  user?: DesktopUser
 }
 
-export type LeagueClientStatus = 'disconnected' | 'lcu_ready' | 'in_match'
-export type MatchResult = 'win' | 'loss'
-
-export interface CurrentMatchState {
-  active: boolean
-  gameTimeSeconds: number
-  gameMode: string | null
-  mapName: string | null
-  startedAt: string | null
-  externalMatchId: string | null
+export interface DesktopUser {
+  id: number
+  name: string
+  email: string
+  role: string
 }
 
-export interface LastReportState {
-  status: 'sent' | 'failed'
-  result: MatchResult
-  duration: number
-  timestamp: string
-  externalMatchId: string | null
-  sentAt: string
-  error?: string
+export type TrackerStatus =
+  | 'ONLINE'
+  | 'OFFLINE'
+  | 'CLIENT_OPEN'
+  | 'IN_LOBBY'
+  | 'IN_CHAMP_SELECT'
+  | 'IN_GAME'
+  | 'GAME_ENDED'
+
+export interface RiotAccountSnapshot {
+  gameName?: string | null
+  tagLine?: string | null
+  summonerName?: string | null
+  puuid?: string | null
+  region?: string | null
+}
+
+export interface CurrentGameSnapshot {
+  gameId?: string | null
+  queueId?: number | null
+  championId?: number | null
+  startedAt?: string | null
+}
+
+export interface LcuSnapshot {
+  clientOpen: boolean
+  status: TrackerStatus
+  gameflowPhase: string | null
+  riotAccount: RiotAccountSnapshot | null
+  currentGame: CurrentGameSnapshot | null
+  rankedProgress: RankedProgressSnapshot | null
+  recentMatches: DesktopTrackedMatch[]
+  capturedAt: string
+  error: string | null
+}
+
+export interface RankedProgressSnapshot {
+  tier?: string | null
+  division?: string | null
+  leaguePoints?: number | null
+  queueType?: string | null
+  wins?: number | null
+  losses?: number | null
+}
+
+export interface DesktopOrder {
+  id: number
+  title: string
+  service_type: string
+  status: string
+  payment_status?: string | null
+  metadata?: Record<string, unknown> | null
+  customer?: {
+    id: number
+    name: string
+    email: string
+  } | null
+  booster?: {
+    id: number
+    name: string
+    email: string
+  } | null
+  tracker_status?: {
+    status: TrackerStatus
+    last_heartbeat_at: string | null
+    riot_account?: RiotAccountSnapshot
+    current_game?: CurrentGameSnapshot
+    ranked_progress?: {
+      snapshot?: RankedProgressSnapshot | null
+      lpDelta?: number | null
+      progressPercent?: number | null
+    } | null
+  } | null
+}
+
+export interface DesktopTrackedMatch {
+  matchId?: string | null
+  gameId?: string | null
+  championId?: number | null
+  queueId?: number | null
+  result?: string | null
+  durationSeconds?: number | null
+  createdAt?: string | null
 }
 
 export interface MonitorState {
-  session: Pick<DesktopSession, 'apiBaseUrl'> | null
+  session: Pick<DesktopSession, 'apiBaseUrl' | 'user'> | null
   isAuthenticated: boolean
-  leagueClient: LeagueClientStatus
-  currentMatch: CurrentMatchState
-  lastReport: LastReportState | null
+  leagueClient: 'disconnected' | 'connected'
+  activeOrderId: number | null
+  latestSnapshot: LcuSnapshot | null
+  lastHeartbeatAt: string | null
   lastError: string | null
 }
 
-export interface MatchReportPayload {
-  external_match_id?: string
-  result: MatchResult
-  duration: number
-  timestamp: string
-  source: 'desktop-app'
-  payload?: Record<string, unknown>
+export interface LoginPayload {
+  apiBaseUrl: string
+  email: string
+  password: string
+}
+
+export interface HeartbeatPayload {
+  orderId: number
+  status: TrackerStatus
+  riotAccount?: RiotAccountSnapshot | null
+  currentGame?: CurrentGameSnapshot | null
+  rankedProgress?: RankedProgressSnapshot | null
 }

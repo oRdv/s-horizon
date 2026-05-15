@@ -1,9 +1,17 @@
 import axios from 'axios'
 import https from 'node:https'
 
-import type { DesktopSession, MatchReportPayload } from '../../shared/types.js'
+import type {
+  DesktopOrder,
+  DesktopSession,
+  HeartbeatPayload,
+  LoginPayload,
+} from '../../shared/types.js'
 
 interface AuthResponse {
+  data: {
+    user: DesktopSession['user']
+  }
   access_token: string
   refresh_token: string
 }
@@ -20,21 +28,20 @@ const JSON_HEADERS = {
 export class BackendReporter {
   private session: DesktopSession | null = null
 
-  constructor(
-    private readonly onSessionUpdate: (session: DesktopSession | null) => Promise<void>,
-  ) {}
+  constructor(private readonly onSessionUpdate: (session: DesktopSession | null) => Promise<void>) {}
 
   setSession(session: DesktopSession | null): void {
     this.session = session
   }
 
-  getSessionPreview(): Pick<DesktopSession, 'apiBaseUrl'> | null {
+  getSessionPreview(): Pick<DesktopSession, 'apiBaseUrl' | 'user'> | null {
     if (!this.session) {
       return null
     }
 
     return {
       apiBaseUrl: this.session.apiBaseUrl,
+      user: this.session.user,
     }
   }
 
@@ -42,37 +49,13 @@ export class BackendReporter {
     return Boolean(this.session?.accessToken)
   }
 
-  async sendMatchReport(payload: MatchReportPayload): Promise<void> {
-    if (!this.session) {
-      throw new Error('Nenhuma sessão de backend foi configurada.')
-    }
-
-    try {
-      await this.postMatchReport(this.session.accessToken, payload)
-    } catch (error) {
-      if (!shouldAttemptRefresh(error) || !this.session.refreshToken) {
-        throw toUserError(error)
-      }
-
-      const refreshedToken = await this.refreshAccessToken()
-
-      if (!refreshedToken) {
-        throw toUserError(error)
-      }
-
-      await this.postMatchReport(refreshedToken, payload)
-    }
-  }
-
-  private async refreshAccessToken(): Promise<string | null> {
-    if (!this.session?.refreshToken) {
-      return null
-    }
-
+  async login(payload: LoginPayload): Promise<DesktopSession> {
+    const apiBaseUrl = normalizeApiBaseUrl(payload.apiBaseUrl)
     const response = await axios.post<AuthResponse>(
-      `${this.session.apiBaseUrl}/api/auth/refresh`,
+      `${apiBaseUrl}/auth/login`,
       {
-        refresh_token: this.session.refreshToken,
+        email: payload.email,
+        password: payload.password,
       },
       {
         headers: JSON_HEADERS,
@@ -80,10 +63,90 @@ export class BackendReporter {
       },
     )
 
-    this.session = {
-      apiBaseUrl: this.session.apiBaseUrl,
+    const session: DesktopSession = {
+      apiBaseUrl,
       accessToken: response.data.access_token,
       refreshToken: response.data.refresh_token,
+      user: response.data.data.user,
+    }
+
+    this.session = session
+    await this.onSessionUpdate(session)
+
+    return session
+  }
+
+  async clear(): Promise<void> {
+    this.session = null
+    await this.onSessionUpdate(null)
+  }
+
+  async getOrders(): Promise<DesktopOrder[]> {
+    const response = await this.authorizedRequest((token) =>
+      axios.get<{ data: { orders: DesktopOrder[] } }>(`${this.requireSession().apiBaseUrl}/orders`, {
+        headers: this.headers(token),
+        httpsAgent,
+      }),
+    )
+
+    return response.data.data.orders
+  }
+
+  async sendHeartbeat(payload: HeartbeatPayload): Promise<void> {
+    await this.authorizedRequest((token) =>
+      axios.post(`${this.requireSession().apiBaseUrl}/booster-tracker/heartbeat`, payload, {
+        headers: this.headers(token),
+        httpsAgent,
+      }),
+    )
+  }
+
+  async sendMatchFinished(payload: Record<string, unknown>): Promise<void> {
+    await this.authorizedRequest((token) =>
+      axios.post(`${this.requireSession().apiBaseUrl}/booster-tracker/match-finished`, payload, {
+        headers: this.headers(token),
+        httpsAgent,
+      }),
+    )
+  }
+
+  private async authorizedRequest<T>(request: (token: string) => Promise<T>): Promise<T> {
+    const session = this.requireSession()
+
+    try {
+      return await request(session.accessToken)
+    } catch (error) {
+      if (!shouldAttemptRefresh(error) || !session.refreshToken) {
+        throw toUserError(error)
+      }
+
+      const refreshedToken = await this.refreshAccessToken()
+
+      return request(refreshedToken)
+    }
+  }
+
+  private async refreshAccessToken(): Promise<string> {
+    const session = this.requireSession()
+
+    if (!session.refreshToken) {
+      throw new Error('Sessao expirada.')
+    }
+
+    const response = await axios.post<AuthResponse>(
+      `${session.apiBaseUrl}/auth/refresh`,
+      { refresh_token: session.refreshToken },
+      {
+        headers: JSON_HEADERS,
+        httpsAgent,
+      },
+    )
+
+    this.session = {
+      apiBaseUrl: session.apiBaseUrl,
+      accessToken: response.data.access_token,
+      refreshToken: response.data.refresh_token,
+      user: response.data.data.user,
     }
 
     await this.onSessionUpdate(this.session)
@@ -91,19 +154,26 @@ export class BackendReporter {
     return this.session.accessToken
   }
 
-  private async postMatchReport(token: string, payload: MatchReportPayload): Promise<void> {
+  private requireSession(): DesktopSession {
     if (!this.session) {
-      return
+      throw new Error('Faca login no app desktop.')
     }
 
-    await axios.post(`${this.session.apiBaseUrl}/api/matches`, payload, {
-      headers: {
-        ...JSON_HEADERS,
-        Authorization: `Bearer ${token}`,
-      },
-      httpsAgent,
-    })
+    return this.session
   }
+
+  private headers(token: string) {
+    return {
+      ...JSON_HEADERS,
+      Authorization: `Bearer ${token}`,
+    }
+  }
+}
+
+function normalizeApiBaseUrl(value: string): string {
+  const trimmed = value.trim().replace(/\/+$/, '')
+
+  return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`
 }
 
 function shouldAttemptRefresh(error: unknown): boolean {
@@ -120,9 +190,5 @@ function toUserError(error: unknown): Error {
     return new Error(message)
   }
 
-  if (error instanceof Error) {
-    return error
-  }
-
-  return new Error('Falha desconhecida ao enviar a partida para o backend.')
+  return error instanceof Error ? error : new Error('Falha de comunicacao com o backend.')
 }

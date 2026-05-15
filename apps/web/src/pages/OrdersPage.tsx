@@ -28,6 +28,7 @@ const rankLabels: Record<string, string> = {
 const serviceLabels: Record<string, string> = {
   solo_boost_division: 'Boost Solo - Divisão',
   duo_boost_division: 'Boost Duo - Divisão',
+  flex_boost_division: 'Boost Flex - Divisão',
   wins_by_rank: 'Vitórias por elo',
 }
 
@@ -82,6 +83,20 @@ function methodLabel(method?: string | null) {
   if (method === 'DEBIT_CARD') return 'Cartão de débito'
   if (method === 'CREDIT_CARD') return 'Cartão de crédito'
   return 'Pagamento'
+}
+
+function trackerLabel(status?: string | null) {
+  const labels: Record<string, string> = {
+    ONLINE: 'Booster online',
+    OFFLINE: 'Booster offline',
+    CLIENT_OPEN: 'Client aberto',
+    IN_LOBBY: 'Booster em lobby',
+    IN_CHAMP_SELECT: 'Selecao de campeoes',
+    IN_GAME: 'Booster em partida',
+    GAME_ENDED: 'Partida finalizada',
+  }
+
+  return labels[status ?? ''] ?? 'Aguardando inicio'
 }
 
 function serviceLabel(serviceType?: string | null) {
@@ -250,6 +265,10 @@ export function OrdersPage() {
                         <span>Criado em</span>
                         <strong>{formatDate(order.created_at)}</strong>
                       </div>
+                      <div>
+                        <span>Acompanhamento</span>
+                        <strong>{trackerLabel(order.tracker_status?.status)}</strong>
+                      </div>
                     </div>
 
                     <div className="client-order-card__footer">
@@ -292,6 +311,7 @@ export function OrdersPage() {
               <div><span>Status do pedido</span><strong>{statusLabel(selectedOrder.status)}</strong></div>
               <div><span>Status do pagamento</span><strong>{statusLabel(selectedOrder.payment_status)}</strong></div>
               <div><span>Booster</span><strong>{selectedOrder.booster?.name ?? 'Aguardando'}</strong></div>
+              <div><span>Acompanhamento</span><strong>{trackerLabel(selectedOrder.tracker_status?.status)}</strong></div>
               <div><span>Criado em</span><strong>{formatDate(selectedOrder.created_at)}</strong></div>
             </div>
           </section>

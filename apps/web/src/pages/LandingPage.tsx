@@ -13,34 +13,34 @@ const discordUrl = 'https://discord.gg/cHPCH7BsrM'
 const services = [
   {
     icon: Trophy,
-    title: 'Solo/Duo Boost',
-    description: 'Quer subir de elo sem ficar preso no mesmo lugar? A gente combina a rota e toca o serviço com você.',
-    bullets: ['Elo de saída e chegada', 'Campeões preferidos', 'Status no painel'],
+    title: 'EloBoost',
+    description: 'Escolha sua rota e selecione seus campeões, nós jogamos para você',
+    bullets: ['rota principal', 'campeões preferidos', 'status no painel'],
   },
   {
     icon: Sparkles,
-    title: 'Duo Boost',
+    title: 'DuoBoost',
     description: 'Você joga junto, aprende no caminho e combina os horários direto com quem vai te acompanhar.',
-    bullets: ['Partidas em duo', 'Horário combinado', 'Contato direto'],
+    bullets: ['partidas em duo', 'horário combinado', 'contato direto'],
   },
   {
     icon: ClipboardCheck,
     title: 'Vitórias e MD5',
-    description: 'Para quando falta pouco: fechar série, passar MD5 ou garantir algumas vitórias sem montar rota grande.',
-    bullets: ['Pacotes fechados', 'Pedido mais rápido', 'Tudo registrado'],
+    description: 'Para quando falta pouco: garantir a MD5 ou aquelas vitórias pro elo desejado.',
+    bullets: ['pacotes fechados', 'pedido mais rápido', 'tudo registrado'],
   },
   {
     icon: Users,
     title: 'Coaching',
-    description: 'Uma revisão honesta do seu jogo: o que está funcionando, o que está te segurando e como corrigir.',
-    bullets: ['Review de partida', 'Dicas práticas', 'Foco no seu elo'],
+    description: 'Aprenda com os melhores',
+    bullets: ['review de partida', 'dicas práticas', 'foco no seu elo'],
   },
 ]
 
 const steps = [
-  'Escolha o serviço e coloque seu elo atual e o elo que quer buscar.',
-  'Veja o valor, tire qualquer dúvida no Discord e confirme só quando estiver tranquilo.',
-  'Depois acompanhe pelo painel, sem ficar caçando conversa antiga.',
+  'Selecione o serviço, informe seu elo atual e defina o elo que deseja alcançar.',
+  'Consulte o valor, esclareça qualquer dúvida pelo Discord e confirme apenas quando tiver certeza.',
+  'Após a confirmação, acompanhe todo o progresso pelo painel.',
 ]
 
 const rankEmblems = {
@@ -131,12 +131,13 @@ export function LandingPage() {
           <div className="hero-content">
             <span className="hero-badge">
               <ShieldCheck size={16} />
-              Boost sem conversa torta
+              Alcance o elo que você merece.
             </span>
-            <h1 className="hero-title">Suba de elo sem perder tempo no mesmo lugar.</h1>
+            <h1 className="hero-title">Descubra o seu verdadeiro potencial
+Eloboost com rapidez e qualidade.</h1>
             <p className="hero-subtitle">
-              Personalize sua jornada de boost de forma dinâmica e simplificada, acompanhando tudo pelo nosso
-              dashboard. Caso tenha alguma dúvida, nossa equipe está disponível 24 horas no Discord.
+             Personalize sua experiência com eloboost de forma prática e intuitiva, acompanhando cada etapa pelo nosso dashboard e com suporte disponível 24 horas através do Discord.
+
             </p>
 
             <div className="hero-actions">
@@ -146,7 +147,7 @@ export function LandingPage() {
               </Link>
               <a className="cta-button cta-button--ghost" href={discordUrl} rel="noreferrer" target="_blank">
                 <MessageCircle size={18} />
-                Falar no Discord
+                Suporte
               </a>
             </div>
           </div>
@@ -156,14 +157,12 @@ export function LandingPage() {
               <span className="live-dot" />
               Atendimento ativo
             </div>
-            <h2>Aqui seu investimento é valorizado.</h2>
-            <p>
-              Faça seu orçamento de.
-            </p>
+            <h2>Qualidade, confiança e resultado em primeiro lugar.</h2>
+            <p>Faça seu orçamento com:</p>
             <div className="discord-panel__perks">
-              <span>Preço antes de pagar</span>
-              <span>Preferências salvas</span>
-              <span>Pedido organizado</span>
+              <span>Transparência</span>
+              <span>Segurança</span>
+              <span>Organização</span>
             </div>
             <Link className="discord-button discord-button--panel" to={user ? '/purchases' : '/signup'}>
               Ver valores
@@ -173,9 +172,9 @@ export function LandingPage() {
 
         <section className="boosters-section" aria-labelledby="boosters-title">
           <div className="section-heading">
-            <span>Quem joga com a gente</span>
+            <span>NOSSOS BOOSTERS</span>
             <h2 className="section-title" id="boosters-title">
-              Boosters prontos para entrar em ação
+              Nossa equipe é formada pelos melhores jogadores, com experiência e capacidade. Conheça nossos jogadores:
             </h2>
           </div>
 
@@ -210,12 +209,8 @@ export function LandingPage() {
 
         <section className="services-section" id="servicos">
           <div className="section-heading">
-            <span>Serviços</span>
-            <h2 className="section-title">Escolha o que faz sentido pra você</h2>
-            <p className="section-subtitle">
-              Tem pedido pra subir de elo, jogar duo, fechar vitória e até revisar gameplay. Você monta do seu jeito e
-              já vê quanto vai ficar.
-            </p>
+            <span>SERVIÇOS</span>
+            <h2 className="section-title">Escolha a opção ideal para você</h2>
           </div>
 
           <div className="services-grid">
@@ -248,12 +243,11 @@ export function LandingPage() {
 
         <section className="company-section">
           <div className="section-heading">
-            <span>Como funciona</span>
-            <h2 className="section-title">Simples, sem ficar indo e voltando</h2>
-            <p className="section-subtitle">
-              Nada de ficar perguntando preço no privado e esperando alguém montar tudo manualmente. O básico já fica
-              na sua frente.
-            </p>
+            <span>COMO FUNCIONA</span>
+            <h2 className="section-title">
+              Simples e direto. Sem precisar solicitar valores ou aguardar atendimento. As principais informações ficam
+              disponíveis de forma clara e imediata para você.
+            </h2>
           </div>
           <div className="steps-grid">
             {steps.map((step, index) => (
@@ -267,11 +261,9 @@ export function LandingPage() {
 
         <section className="cta-section">
           <div>
-            <span className="cta-section__eyebrow">Pronto para começar?</span>
-            <h2>Monte seu pedido e veja na hora quanto fica.</h2>
-            <p>
-              Crie sua conta, simule a rota, coloque suas preferências e siga só quando estiver tudo certo pra você.
-            </p>
+            <span className="cta-section__eyebrow">PRONTO PARA COMEÇAR?</span>
+            <h2>Monte seu pedido e veja o valor instantaneamente.</h2>
+            <p>Crie sua conta, simule a rota, personalize suas preferências e prossiga.</p>
           </div>
           <Link className="cta-button cta-button--primary" to={user ? '/purchases' : '/signup'}>
             Começar agora
@@ -282,18 +274,18 @@ export function LandingPage() {
         <section className="booster-recruit-section">
           <div className="booster-recruit-card">
             <div>
-              <span className="cta-section__eyebrow">Área dos boosters</span>
-              <h2>Joga bem e quer pegar serviço com a Horizon?</h2>
+              <span className="cta-section__eyebrow">SEJA BOOSTER</span>
+              <h2>Faça parte da equipe de boosters da Horizon.</h2>
               <p>
-                Manda sua inscrição pra análise. A gente olha conta, disponibilidade, OP.GG, Discord e dados de
-                pagamento antes de liberar o acesso.
+                Envie sua inscrição para análise. Avaliamos disponibilidade, OP.GG, Discord e informações necessárias
+                antes da aprovação.
               </p>
             </div>
 
             <div className="booster-recruit-list">
-              <span>Análise da equipe</span>
-              <span>OP.GG, Discord e horários</span>
-              <span>Pagamentos via Pix e percentual inicial</span>
+              <span>gameplay</span>
+              <span>disponibilidade</span>
+              <span>porcentagem inicial</span>
             </div>
 
             <Link className="cta-button cta-button--primary booster-recruit-button" to="/booster/apply">
