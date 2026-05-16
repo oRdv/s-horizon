@@ -39,41 +39,19 @@ function writePreferences(preferences: DashboardPreferences): void {
 export const dashboardService = {
   async getOverview(userName?: string): Promise<DashboardOverview> {
     const preferences = readPreferences()
-    const displayName = userName?.split(' ')[0] ?? 'Captain'
+    const displayName = userName?.split(' ')[0] ?? 'usuario'
 
     return {
-      headline: `Controle a operação do ${displayName} com uma visão clara do mês.`,
+      headline: `Controle a operacao do ${displayName} com uma visao clara do mes.`,
       status: preferences.status,
       monthlyGoal: preferences.monthlyGoal,
       monthEarnings: {
-        total: 12450,
-        delta: 18,
-        series: [24, 28, 35, 41, 37, 52, 61, 74, 69, 88, 92, 100],
-        note: 'Dados simulados para substituir por histórico real depois.',
+        total: 0,
+        delta: 0,
+        series: [],
+        note: 'Sem historico real registrado ainda.',
       },
-      upcomingServices: [
-        {
-          id: 'svc-01',
-          customer: 'Astra Duo',
-          queue: 'Flex 5v5',
-          scheduleLabel: 'Hoje, 21:00',
-          notes: 'Sessão longa com bom ticket. Ideal para oferecer pacote de acompanhamento.',
-        },
-        {
-          id: 'svc-02',
-          customer: 'Noctis Rush',
-          queue: 'SoloQ Master',
-          scheduleLabel: 'Amanhã, 18:30',
-          notes: 'Janela boa para grind de três partidas e upgrade para combo maior.',
-        },
-        {
-          id: 'svc-03',
-          customer: 'Velvet Climb',
-          queue: 'Duo Emerald',
-          scheduleLabel: 'Sábado, 14:00',
-          notes: 'Plano leve para aquecimento, com chance de converter em recorrência.',
-        },
-      ],
+      upcomingServices: [],
     }
   },
 

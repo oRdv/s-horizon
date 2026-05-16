@@ -17,7 +17,7 @@ import {
 import type { DesktopOrder, LcuSnapshot, LoginPayload, MonitorState, TrackerStatus } from '../shared/types'
 
 const heartbeatSeconds = Number(import.meta.env.VITE_TRACKER_HEARTBEAT_INTERVAL_SECONDS ?? 15)
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'https://horizonboost.gg/api'
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'https://api.horizonboost.com.br/api'
 
 const initialState: MonitorState = {
   session: null,
@@ -48,8 +48,8 @@ function App() {
   const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [form, setForm] = useState<LoginPayload>({
     apiBaseUrl,
-    email: 'raven.booster@horizonboost.gg',
-    password: 'Boost@12345',
+    email: '',
+    password: '',
   })
 
   const selectedOrder = useMemo(
@@ -237,7 +237,7 @@ function App() {
 
         <div className="tracker-sidebar__footer">
           <div>
-            <span>{state.session?.user?.name ?? 'Booster'}</span>
+            <span>{state.session?.user?.name ?? 'Nome nao informado'}</span>
             <strong>{state.session?.user?.email}</strong>
           </div>
           <button className="icon-button" onClick={handleLogout} title="Sair" type="button">
@@ -285,7 +285,7 @@ function App() {
                   <div className="order-card__main">
                     <span>Pedido #{order.id}</span>
                     <strong>{formatOrderTitle(order)}</strong>
-                    <small>{order.customer?.name ?? 'Cliente'} · {order.status}</small>
+                    <small>{order.customer?.name ?? 'Cliente sem nome'} · {order.status}</small>
                   </div>
                   <RankRoute order={order} />
                 </button>
@@ -371,7 +371,7 @@ function OrderSummary({ order }: { order: DesktopOrder }) {
       </div>
       <div>
         <span>Cliente</span>
-        <strong>{order.customer?.name ?? 'Cliente'}</strong>
+        <strong>{order.customer?.name ?? 'Cliente sem nome'}</strong>
       </div>
       <div>
         <span>Status do pedido</span>
@@ -383,8 +383,8 @@ function OrderSummary({ order }: { order: DesktopOrder }) {
 }
 
 function RankRoute({ order, large = false }: { order: DesktopOrder; large?: boolean }) {
-  const current = readMeta(order, ['current_rank', 'currentRank', 'eloAtual']) ?? 'Ouro IV'
-  const desired = readMeta(order, ['desired_rank', 'desiredRank', 'eloDesejado']) ?? 'Platina IV'
+  const current = readMeta(order, ['current_rank', 'currentRank', 'eloAtual']) ?? 'Nao informado'
+  const desired = readMeta(order, ['desired_rank', 'desiredRank', 'eloDesejado']) ?? 'Nao informado'
 
   return (
     <div className={`rank-route ${large ? 'rank-route--large' : ''}`}>

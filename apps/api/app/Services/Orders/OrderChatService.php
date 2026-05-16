@@ -43,8 +43,6 @@ final class OrderChatService
             $conversation->forceFill($updates)->save();
         }
 
-        $this->seedDevelopmentMessages($conversation);
-
         return $conversation;
     }
 
@@ -176,53 +174,5 @@ final class OrderChatService
     public function isChatAvailable(ServiceOrder $order): bool
     {
         return $order->payment_status === 'PAID' && filled($order->booster_id);
-    }
-
-    private function seedDevelopmentMessages(OrderConversation $conversation): void
-    {
-        if (app()->environment('production') || env('CHAT_DEV_SEED') !== true) {
-            return;
-        }
-
-        if ($conversation->messages()->exists()) {
-            return;
-        }
-
-        $conversation->loadMissing(['customer', 'booster']);
-
-        if (! $conversation->customer || ! $conversation->booster) {
-            return;
-        }
-
-        $now = now();
-        $messages = [
-            [
-                'order_conversation_id' => $conversation->getKey(),
-                'sender_id' => $conversation->customer_id,
-                'sender_type' => 'CLIENT',
-                'body' => 'Oi! Pedido confirmado por aqui. Pode me chamar quando for começar.',
-                'is_read' => true,
-                'read_at' => $now,
-                'created_at' => $now->copy()->subMinutes(4),
-                'updated_at' => $now->copy()->subMinutes(4),
-            ],
-            [
-                'order_conversation_id' => $conversation->getKey(),
-                'sender_id' => $conversation->booster_id,
-                'sender_type' => 'BOOSTER',
-                'body' => 'Perfeito. Vou acompanhar os detalhes do pedido e aviso antes de iniciar.',
-                'is_read' => false,
-                'read_at' => null,
-                'created_at' => $now->copy()->subMinutes(2),
-                'updated_at' => $now->copy()->subMinutes(2),
-            ],
-        ];
-
-        OrderChatMessage::query()->insert($messages);
-
-        $conversation->forceFill([
-            'last_message' => $messages[1]['body'],
-            'last_message_at' => $messages[1]['created_at'],
-        ])->save();
     }
 }

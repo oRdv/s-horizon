@@ -649,7 +649,7 @@ function MasterDashboardView({ dashboard }: { dashboard: MasterDashboard }) {
               <input
                 value={boosterForm.nick}
                 onChange={(event) => updateLandingBoosterForm('nick', event.target.value)}
-                placeholder="Ex.: Akshan"
+                placeholder="Ex.: nick do booster"
               />
             </label>
 
@@ -658,7 +658,7 @@ function MasterDashboardView({ dashboard }: { dashboard: MasterDashboard }) {
               <input
                 value={boosterForm.champion_name}
                 onChange={(event) => updateLandingBoosterForm('champion_name', event.target.value)}
-                placeholder="Ex.: Akshan"
+                placeholder="Ex.: campeao principal"
               />
               <small>Use o nome do campeão como está no LoL para puxar a imagem da API.</small>
             </label>
@@ -887,7 +887,7 @@ function BoosterDashboardView({ dashboard }: { dashboard: BoosterDashboard }) {
                 <div className="client-order-card__meta">
                   <div>
                     <span>Cliente</span>
-                    <strong>{order.customer?.name ?? 'Cliente Horizon'}</strong>
+                    <strong>{order.customer?.name ?? 'Cliente sem nome'}</strong>
                   </div>
                   <div>
                     <span>Serviço</span>

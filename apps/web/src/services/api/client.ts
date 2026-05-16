@@ -18,16 +18,17 @@ const JSON_HEADERS = {
 
 const configuredApiUrl = import.meta.env.VITE_API_URL
 const invalidApiUrlValues = new Set(['', 'undefined', 'null'])
+const productionApiUrl = 'https://api.horizonboost.com.br/api'
 
 function resolveApiBaseUrl(value: unknown): string {
   if (typeof value !== 'string') {
-    return '/api'
+    return productionApiUrl
   }
 
   const normalized = value.trim()
 
   if (invalidApiUrlValues.has(normalized.toLowerCase()) || normalized.includes('api.boosthorizon.com')) {
-    return '/api'
+    return productionApiUrl
   }
 
   return normalized.replace(/\/$/, '')

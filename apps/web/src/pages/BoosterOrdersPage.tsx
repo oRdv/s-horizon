@@ -351,7 +351,7 @@ export function BoosterOrdersPage() {
                           <div className="booster-priority-card__body">
                             <span>Pedido #{order.id}</span>
                             <strong>{route.current} para {route.target}</strong>
-                            <small>{order.customer?.name ?? 'Cliente Horizon'}</small>
+                            <small>{order.customer?.name ?? 'Cliente sem nome'}</small>
                           </div>
                           <div className="booster-priority-card__deadline">
                             <Clock3 size={15} />
@@ -407,7 +407,7 @@ export function BoosterOrdersPage() {
                     <div className="client-order-card__meta">
                       <div>
                         <span>Cliente</span>
-                        <strong>{order.customer?.name ?? 'Cliente Horizon'}</strong>
+                        <strong>{order.customer?.name ?? 'Cliente sem nome'}</strong>
                       </div>
                       <div>
                         <span>Seu ganho</span>
@@ -434,7 +434,7 @@ export function BoosterOrdersPage() {
                         </div>
                         <div>
                           <span>Cliente do pedido</span>
-                          <strong>{order.customer?.name ?? 'Cliente Horizon'}</strong>
+                          <strong>{order.customer?.name ?? 'Cliente sem nome'}</strong>
                         </div>
                       </div>
 
@@ -479,7 +479,7 @@ export function BoosterOrdersPage() {
             <p>{selectedOrder.description}</p>
             <div className="client-order-card__meta">
               <div><span>Status do pedido</span><strong>{statusLabel(selectedOrder.status)}</strong></div>
-              <div><span>Cliente</span><strong>{selectedOrder.customer?.name ?? 'Cliente Horizon'}</strong></div>
+              <div><span>Cliente</span><strong>{selectedOrder.customer?.name ?? 'Cliente sem nome'}</strong></div>
               <div><span>Seu ganho</span><strong>{formatCurrencyCents(getBoosterPayout(getOrderAmount(selectedOrder)))}</strong></div>
               <div><span>Criado em</span><strong>{formatDate(selectedOrder.created_at)}</strong></div>
             </div>
