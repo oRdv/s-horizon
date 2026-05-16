@@ -13,7 +13,10 @@ use App\Http\Controllers\Api\SecurityController;
 use App\Http\Controllers\Api\ServiceOrderController;
 use App\Http\Controllers\Api\UserManagementController;
 use App\Http\Controllers\Api\WithdrawalRequestController;
+use App\Http\Controllers\HealthController;
 use Illuminate\Support\Facades\Route;
+
+Route::get('/health', HealthController::class);
 
 Route::prefix('auth')->group(function (): void {
     Route::post('/login', [AuthController::class, 'login']);

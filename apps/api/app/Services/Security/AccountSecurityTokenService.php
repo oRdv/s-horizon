@@ -8,6 +8,7 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -75,7 +76,7 @@ final class AccountSecurityTokenService
 
         if (! $record || $record->isExpired() || ! Hash::check($token, $record->token_hash)) {
             throw ValidationException::withMessages([
-                'token' => ['O token informado é inválido ou expirou.'],
+                'token' => ['O token informado e invalido ou expirou.'],
             ]);
         }
 
@@ -105,19 +106,33 @@ final class AccountSecurityTokenService
 
     private function send(string $email, SecurityTokenPurpose $purpose, string $token): void
     {
+        $context = [
+            'email_hash' => hash('sha256', strtolower($email)),
+            'purpose' => $purpose->value,
+            'mailer' => config('mail.default'),
+            'host' => config('mail.mailers.smtp.host'),
+            'port' => config('mail.mailers.smtp.port'),
+            'scheme' => config('mail.mailers.smtp.scheme'),
+            'from_address' => config('mail.from.address'),
+        ];
+
+        Log::info('mail.security_token_send_attempt', $context);
+
         $subject = match ($purpose) {
             SecurityTokenPurpose::EmailVerification => 'Confirme seu cadastro na Horizon Boost',
-            SecurityTokenPurpose::ProfileChange => 'Confirme a alteração do seu perfil',
+            SecurityTokenPurpose::ProfileChange => 'Confirme a alteracao do seu perfil',
             SecurityTokenPurpose::PasswordChange => 'Confirme a troca de senha',
-            SecurityTokenPurpose::TwoFactorSetup => 'Confirme a autenticação em duas etapas',
-            SecurityTokenPurpose::TwoFactorLogin => 'Código de login em duas etapas',
+            SecurityTokenPurpose::TwoFactorSetup => 'Confirme a autenticacao em duas etapas',
+            SecurityTokenPurpose::TwoFactorLogin => 'Codigo de login em duas etapas',
         };
 
         Mail::raw(
-            "Seu código Horizon Boost é {$token}. Ele expira em 30 minutos.",
+            "Seu codigo Horizon Boost e {$token}. Ele expira em 30 minutos.",
             static function ($message) use ($email, $subject): void {
                 $message->to($email)->subject($subject);
             },
         );
+
+        Log::info('mail.security_token_send_success', $context);
     }
 }

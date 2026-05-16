@@ -39,3 +39,10 @@
 [2m19:28:12[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/LandingPage.tsx[22m
 [2m19:31:18[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/LandingPage.tsx[22m
 [2m19:45:10[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/LandingPage.tsx[22m
+[2m20:57:38[22m [36m[1m[vite][22m[39m [32m.env.local changed, restarting server...[39m
+[2m20:57:38[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.tsx, /src/pages/AdminUsersPage.tsx, /src/pages/BoosterOrdersPage.tsx, /src/pages/BoosterApplicationPage.tsx, /src/pages/LoginPage.tsx, /src/pages/EmailVerificationPage.tsx, /src/pages/FinancePage.tsx, /src/pages/OrdersPage.tsx, /src/pages/SignupPage.tsx, /src/pages/PaymentResultPage.tsx, /src/pages/ProfilePage.tsx, /src/pages/PurchasesPage.tsx, /src/pages/SystemDashboardPage.tsx, /src/pages/LandingPage.tsx, /src/components/chat/ChatModal.tsx, /src/components/PricingBuilder.tsx[22m
+[2m20:57:39[22m [36m[1m[vite][22m[39m server restarted.
+[2m20:58:05[22m [36m[1m[vite][22m[39m [32mvite.config.ts changed, restarting server...[39m
+[2m20:58:06[22m [36m[1m[vite][22m[39m server restarted.
+[2m21:12:45[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/SystemDashboardPage.tsx[22m
+[2m21:12:50[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/BoosterOrdersPage.tsx[22m

@@ -9,7 +9,7 @@ const friendlyFieldLabels: Record<string, string> = {
   name: 'nome',
   email: 'e-mail',
   password: 'senha',
-  password_confirmation: 'confirmação de senha',
+  password_confirmation: 'confirmacao de senha',
 }
 
 export function getApiErrorMessage(error: unknown, fallback: string): string {
@@ -38,15 +38,23 @@ export function getApiErrorMessages(error: unknown, fallback: string): string[] 
   }
 
   if (error.response?.status === 422) {
-    return ['Revise os dados do formulário e tente novamente.']
+    return ['Revise os dados do formulario e tente novamente.']
   }
 
   if (error.response?.status === 401) {
-    return ['E-mail ou senha inválidos. Confira os dados e tente novamente.']
+    return ['E-mail ou senha invalidos. Confira os dados e tente novamente.']
+  }
+
+  if (error.response?.status === 503) {
+    return ['Servico temporariamente indisponivel. Tente novamente em instantes ou fale com o suporte.']
+  }
+
+  if (typeof error.response?.status === 'number' && error.response.status >= 500) {
+    return ['O servidor encontrou um erro. Tente novamente em instantes ou fale com o suporte.']
   }
 
   if (!error.response) {
-    return ['Não foi possível conectar ao servidor. Verifique se a API está rodando.']
+    return ['Nao foi possivel conectar ao servidor. Verifique se a API esta rodando.']
   }
 
   return [fallback]
@@ -57,28 +65,28 @@ function translateValidationMessage(field: string, message: string): string {
 
   if (
     normalized.includes('already been taken') ||
-    normalized.includes('já está cadastrado') ||
-    normalized.includes('ja esta cadastrado')
+    normalized.includes('ja esta cadastrado') ||
+    normalized.includes('já está cadastrado')
   ) {
-    return 'Este e-mail já está cadastrado. Tente entrar ou use outro e-mail.'
+    return 'Este e-mail ja esta cadastrado. Tente entrar ou use outro e-mail.'
   }
 
   if (normalized.includes('at least 8') || normalized.includes('pelo menos 8')) {
     return 'A senha precisa ter pelo menos 8 caracteres.'
   }
 
-  if (normalized.includes('confirmation') || normalized.includes('confirmação') || normalized.includes('confirmacao')) {
-    return 'A confirmação da senha não confere.'
+  if (normalized.includes('confirmation') || normalized.includes('confirmacao') || normalized.includes('confirmação')) {
+    return 'A confirmacao da senha nao confere.'
   }
 
   if (normalized.includes('valid email') || normalized.includes('email valido')) {
-    return 'Digite um e-mail válido.'
+    return 'Digite um e-mail valido.'
   }
 
   if (
     normalized.includes('required') ||
-    normalized.includes('obrigatório') ||
     normalized.includes('obrigatorio') ||
+    normalized.includes('obrigatório') ||
     normalized.includes('informe')
   ) {
     const label = friendlyFieldLabels[field] ?? field
@@ -98,15 +106,26 @@ function translateGenericMessage(message: string): string {
     normalized.includes('badcredentials') ||
     normalized.includes('username and password not accepted')
   ) {
-    return 'Não conseguimos enviar o e-mail agora. Verifique a configuração SMTP da Horizon Boost.'
+    return 'Nao conseguimos enviar o e-mail agora. Verifique a configuracao SMTP da Horizon Boost.'
+  }
+
+  if (
+    normalized.includes('banco de dados') ||
+    normalized.includes('db_host') ||
+    normalized.includes('db_database') ||
+    normalized.includes('db_username') ||
+    normalized.includes('db_password') ||
+    normalized.includes('database')
+  ) {
+    return 'Nao foi possivel conectar ao banco de dados da Horizon Boost. Verifique a configuracao do servidor.'
   }
 
   if (normalized.includes('the given data was invalid')) {
-    return 'Revise os dados do formulário e tente novamente.'
+    return 'Revise os dados do formulario e tente novamente.'
   }
 
   if (normalized.includes('credentials') || normalized.includes('credenciais')) {
-    return 'E-mail ou senha inválidos. Confira os dados e tente novamente.'
+    return 'E-mail ou senha invalidos. Confira os dados e tente novamente.'
   }
 
   return message

@@ -583,7 +583,6 @@ export function AdminUsersPage() {
                 <span className="panel__eyebrow">Tipo de usuário</span>
                 <h3>Defina o que essa conta é</h3>
               </div>
-              <p>Ao editar alguém, basta trocar o card abaixo e salvar. O backend recalcula as permissões automaticamente.</p>
             </div>
 
             <div className="role-picker" role="radiogroup" aria-label="Tipo de usuário">
