@@ -325,6 +325,30 @@ export function getFixedPriceValue(range: PriceRange) {
   return roundSuggested(range.min, range.max)
 }
 
+export function getEloHighBoostReferenceLabel(tier: RankTier) {
+  if (tier === 'diamond') {
+    const diamondValues = rankDivisions
+      .map((division) => eloHighBoostStepPrices[`diamond-${division}`])
+      .filter((value): value is number => typeof value === 'number')
+
+    if (diamondValues.length) {
+      return `R$ ${Math.min(...diamondValues)} - ${Math.max(...diamondValues)}`
+    }
+  }
+
+  const tierValue = eloHighBoostStepPrices[tier]
+
+  if (typeof tierValue === 'number') {
+    return `R$ ${tierValue}`
+  }
+
+  if (isApexTier(tier)) {
+    return 'Sob consulta'
+  }
+
+  return `R$ ${getFixedPriceValue(getPriceRow(tier).solo)}`
+}
+
 export function formatTierDivision(tier: RankTier, division?: RankDivision) {
   const row = getPriceRow(tier)
 

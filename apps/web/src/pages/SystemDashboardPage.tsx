@@ -7,6 +7,7 @@ import {
   ClipboardList,
   Download,
   Pencil,
+  ReceiptText,
   ShoppingBag,
   Target,
   Trash2,
@@ -45,8 +46,9 @@ function formatCurrency(value: number | string) {
 
 function formatPaymentMethod(method: PaymentTransaction['method']) {
   if (method === 'PIX' || method === 'pix') return 'Pix'
-  if (method === 'DEBIT_CARD') return 'Debito'
-  return 'Credito'
+  if (method === 'DEBIT_CARD') return 'Cartao de debito'
+  if (method === 'CREDIT_CARD') return 'Cartao de credito'
+  return 'Pagamento'
 }
 
 function formatPaymentProvider(provider: PaymentTransaction['provider']) {
@@ -102,6 +104,42 @@ function getOrderRouteLabel(order: ServiceOrder) {
   const ladderText = order.metadata?.ladder_text
 
   return typeof ladderText === 'string' && ladderText.trim().length ? ladderText : order.title
+}
+
+function statusLabel(status?: string | null) {
+  const labels: Record<string, string> = {
+    PENDING: 'Pendente',
+    WAITING_PAYMENT: 'Aguardando pagamento',
+    REQUIRES_ACTION: 'Aguardando confirmacao',
+    PROCESSING: 'Processando',
+    PAID: 'Pago',
+    WAITING_BOOSTER: 'Aguardando booster',
+    BOOSTER_ASSIGNED: 'Booster designado',
+    IN_PROGRESS: 'Em andamento',
+    COMPLETED: 'Concluido',
+    CANCELLED: 'Cancelado',
+    FAILED: 'Falhou',
+    EXPIRED: 'Expirado',
+    REFUNDED: 'Reembolsado',
+  }
+
+  return labels[status ?? ''] ?? status ?? 'Pendente'
+}
+
+function statusTone(status?: string | null) {
+  if (status === 'PAID' || status === 'COMPLETED') return 'success'
+  if (status === 'EXPIRED' || status === 'FAILED' || status === 'CANCELLED') return 'danger'
+  if (status === 'IN_PROGRESS' || status === 'BOOSTER_ASSIGNED' || status === 'PROCESSING') return 'active'
+
+  return 'waiting'
+}
+
+function getOrderPrice(order: ServiceOrder) {
+  return order.final_price ?? order.latest_payment?.finalAmount ?? order.latest_payment?.amount ?? order.price
+}
+
+function getOrderPaymentStatus(order: ServiceOrder) {
+  return order.payment_status ?? order.latest_payment?.status ?? order.status
 }
 
 function getOrderModeLabel(order: ServiceOrder) {
@@ -332,11 +370,11 @@ export function SystemDashboardPage() {
             <div className="system-hero__actions">
               {hasPermission(user, 'users.view_all') ? (
                 <Link className="primary-button" to="/admin/users">
-                  Gerenciar usuarios
+                  Gerenciar usuários
                 </Link>
               ) : null}
               <Link className="ghost-button" to="/profile">
-                Seguranca da conta
+                Segurança da conta
               </Link>
             </div>
           </section>
@@ -588,7 +626,7 @@ function MasterDashboardView({ dashboard }: { dashboard: MasterDashboard }) {
                   <small>
                     {session.riot_account?.gameName
                       ? `${session.riot_account.gameName}${session.riot_account.tagLine ? `#${session.riot_account.tagLine}` : ''}`
-                      : 'Conta nao detectada'}
+                      : 'Conta não detectada'}
                   </small>
                 </div>
                 <div className="tracker-live-progress">
@@ -783,7 +821,7 @@ function StaffDashboardView({ dashboard }: { dashboard: StaffDashboard }) {
         <SummaryCard icon={ClipboardList} label="Pedidos ativos" value={dashboard.operation.active_orders} />
         <SummaryCard icon={Users} label="Boosters ativos" value={dashboard.operation.active_boosters} />
         <SummaryCard icon={Banknote} label="Retiradas pendentes" value={dashboard.finance.pending_withdrawals} />
-        <SummaryCard icon={BadgeDollarSign} label="Receita do mes" value={formatCurrency(dashboard.finance.month_revenue)} />
+        <SummaryCard icon={BadgeDollarSign} label="Receita do mês" value={formatCurrency(dashboard.finance.month_revenue)} />
       </section>
 
       <article className="management-panel panel">
@@ -938,48 +976,86 @@ function CustomerDashboardView({ dashboard }: { dashboard: CustomerDashboard }) 
       </section>
 
       <section className="system-grid-two">
-        <article className="management-panel panel">
-          <span className="panel__eyebrow">Area do cliente</span>
-          <h2>Pedidos e andamento</h2>
-          <div className="stack-list">
+        <article className="client-dashboard-panel panel">
+          <div className="client-dashboard-panel__header">
+            <div>
+              <span className="panel__eyebrow">Area do cliente</span>
+              <h2>Pedidos em andamento</h2>
+            </div>
+            <Link className="ghost-button ghost-button--compact" to="/purchases">
+              <ShoppingBag size={15} />
+              Comprar boost
+            </Link>
+          </div>
+
+          <div className="client-order-list">
             {dashboard.orders.length ? (
               dashboard.orders.map((order) => (
-                <div className="stack-list__item" key={order.id}>
-                  <strong>{order.title}</strong>
-                  <span>{order.status} · {formatCurrency(order.price)}</span>
-                </div>
+                <article className="client-dashboard-order" key={order.id}>
+                  <div className="client-dashboard-order__main">
+                    <span className={`client-status-pill is-${statusTone(getOrderPaymentStatus(order))}`}>
+                      {statusLabel(getOrderPaymentStatus(order))}
+                    </span>
+                    <strong>{getOrderModeLabel(order)}</strong>
+                    <p>{getOrderRouteLabel(order)}</p>
+                  </div>
+                  <div className="client-dashboard-order__meta">
+                    <div>
+                      <span>Valor</span>
+                      <strong>{formatCurrency(getOrderPrice(order))}</strong>
+                    </div>
+                    <div>
+                      <span>Entrega</span>
+                      <strong>{formatShortDateWithTime(getDeliveryDeadline(order))}</strong>
+                    </div>
+                  </div>
+                </article>
               ))
             ) : (
-              <>
-                <p>Você ainda não tem pedidos. A tabela de preços completa fica na área de compras.</p>
-                <Link className="primary-button" to="/purchases">
-                  Abrir tabela completa
+              <div className="client-empty-state">
+                <ShoppingBag size={40} />
+                <strong>Nenhum pedido ainda</strong>
+                <p>Monte sua rota, escolha o serviço e acompanhe tudo por aqui.</p>
+                <Link className="primary-button primary-button--crimson" to="/purchases">
+                  Compre agora seu boost
                 </Link>
-              </>
+              </div>
             )}
           </div>
         </article>
 
-        <article className="management-panel panel payment-preview-panel">
-          <span className="panel__eyebrow">Pagamentos</span>
-          <h2>Histórico recente</h2>
-          <div className="payment-preview-list">
+        <article className="client-dashboard-panel panel">
+          <div className="client-dashboard-panel__header">
+            <div>
+              <span className="panel__eyebrow">Pagamentos</span>
+              <h2>Historico recente</h2>
+            </div>
+            <ReceiptText size={22} />
+          </div>
+
+          <div className="client-payment-list">
             {dashboard.payments.length ? (
               dashboard.payments.map((payment) => (
-                <div className="payment-preview-item" key={payment.id}>
-                  <div>
-                    <strong>{payment.service_order?.title ?? 'Pagamento Horizon'}</strong>
-                    <span>
-                      {formatPaymentProvider(payment.provider)} · {formatPaymentMethod(payment.method)} · {payment.status}
+                <article className="client-payment-card" key={payment.id}>
+                  <div className="client-payment-card__copy">
+                    <span className={`client-status-pill is-${statusTone(payment.status)}`}>
+                      {statusLabel(payment.status)}
                     </span>
+                    <strong>{payment.service_order?.title ?? 'Pagamento Horizon'}</strong>
+                    <p>{formatPaymentProvider(payment.provider)} - {formatPaymentMethod(payment.method)}</p>
                   </div>
-                  <div>
-                    <strong>{formatCurrency(payment.amount)}</strong>
+                  <div className="client-payment-card__amount">
+                    <span>Valor</span>
+                    <strong>{formatCurrency(payment.finalAmount ?? payment.amount)}</strong>
                   </div>
-                </div>
+                </article>
               ))
             ) : (
-              <p>Nenhum pagamento registrado ainda.</p>
+              <div className="client-empty-state">
+                <ReceiptText size={40} />
+                <strong>Nenhum pagamento registrado</strong>
+                <p>Quando você comprar um boost, o pagamento aparecerá aqui.</p>
+              </div>
             )}
           </div>
         </article>

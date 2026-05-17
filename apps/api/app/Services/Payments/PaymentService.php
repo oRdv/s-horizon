@@ -11,7 +11,6 @@ use App\Models\ServiceOrder;
 use App\Models\User;
 use App\Services\Orders\OrderChatService;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -62,23 +61,23 @@ final class PaymentService
         };
 
         $amounts = $this->pricing->calculateForMethod($this->orderBaseAmount($boost), $method);
-        $testOverride = $this->pixTestAmountOverride($method);
-
-        if ($testOverride !== null) {
-            $amounts['originalFinalAmount'] = $amounts['finalAmount'];
-            $amounts['feeAmount'] = 0;
-            $amounts['discountAmount'] = max(0, $amounts['baseAmount'] - $testOverride);
-            $amounts['finalAmount'] = $testOverride;
-            $amounts['paymentTestMode'] = true;
-        }
 
         $payment = DB::transaction(function () use ($user, $order, $boost, $method, $provider, $amounts, $installments): Payment {
+            $this->expireStalePixPayments($user, $order, $boost, $method, $installments);
+
             $reusablePayment = Payment::query()
                 ->where('user_id', $user->getKey())
                 ->where('order_id', $order->getKey())
                 ->where('boost_id', $boost->getKey())
                 ->where('method', $method->value)
                 ->where('installments', $installments)
+                ->when($method === PaymentMethod::Pix, function ($query): void {
+                    $query->where(function ($pixQuery): void {
+                        $pixQuery
+                            ->whereNull('expires_at')
+                            ->orWhere('expires_at', '>', now());
+                    });
+                })
                 ->whereIn('status', [
                     PaymentStatus::WaitingPayment->value,
                     PaymentStatus::RequiresAction->value,
@@ -109,7 +108,7 @@ final class PaymentService
                 'customer_email' => $user->email,
                 'metadata' => [
                     'pricing' => $amounts,
-                    'payment_test_mode' => (bool) ($amounts['paymentTestMode'] ?? false),
+                    'payment_test_mode' => false,
                 ],
             ]);
 
@@ -129,10 +128,6 @@ final class PaymentService
                 PaymentProvider::Stripe => $this->createStripePaymentIntent($payment),
                 PaymentProvider::MercadoPago => $this->createMercadoPagoPix($payment),
             };
-
-            if ($provider === PaymentProvider::MercadoPago && ($amounts['paymentTestMode'] ?? false) === true) {
-                $this->consumePixTestOverride();
-            }
 
             return ['payment' => $payment->refresh(), 'gateway' => $gateway];
         }
@@ -332,42 +327,6 @@ final class PaymentService
         return ((int) $whole * 100) + (int) str_pad(substr($fraction, 0, 2), 2, '0');
     }
 
-    private function pixTestAmountOverride(PaymentMethod $method): ?int
-    {
-        if ($method !== PaymentMethod::Pix || app()->environment('production')) {
-            return null;
-        }
-
-        if (! filter_var(config('payments.test_mode'), FILTER_VALIDATE_BOOL)) {
-            return null;
-        }
-
-        $amount = config('payments.force_next_pix_amount_cents');
-
-        if (! is_numeric($amount) || (int) $amount !== 1) {
-            return null;
-        }
-
-        return 1;
-    }
-
-    private function consumePixTestOverride(): void
-    {
-        if (app()->environment('production')) {
-            return;
-        }
-
-        $envPath = base_path('.env');
-        if (! File::exists($envPath)) {
-            return;
-        }
-
-        $contents = File::get($envPath);
-        $contents = preg_replace('/^PAYMENT_FORCE_NEXT_PIX_AMOUNT_CENTS=.*$/m', 'PAYMENT_FORCE_NEXT_PIX_AMOUNT_CENTS=', $contents) ?? $contents;
-        File::put($envPath, $contents);
-        config(['payments.force_next_pix_amount_cents' => null]);
-    }
-
     private function hasProviderPayload(Payment $payment): bool
     {
         if ($payment->provider === PaymentProvider::Stripe->value) {
@@ -379,6 +338,32 @@ final class PaymentService
         }
 
         return false;
+    }
+
+    private function expireStalePixPayments(
+        User $user,
+        ServiceOrder $order,
+        ServiceOrder $boost,
+        PaymentMethod $method,
+        int $installments,
+    ): void {
+        if ($method !== PaymentMethod::Pix) {
+            return;
+        }
+
+        Payment::query()
+            ->where('user_id', $user->getKey())
+            ->where('order_id', $order->getKey())
+            ->where('boost_id', $boost->getKey())
+            ->where('method', PaymentMethod::Pix->value)
+            ->where('installments', $installments)
+            ->where('status', PaymentStatus::WaitingPayment->value)
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<=', now())
+            ->update([
+                'status' => PaymentStatus::Expired->value,
+                'updated_at' => now(),
+            ]);
     }
 
     /**

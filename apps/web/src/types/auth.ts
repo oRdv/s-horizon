@@ -48,14 +48,17 @@ export interface SecurityTokenPreview {
 
 export interface AuthResponse {
   data: {
-    user: AuthUser
+    user?: AuthUser
     email_verification?: SecurityTokenPreview
+    security?: SecurityTokenPreview
   }
-  access_token: string
-  refresh_token: string
-  token_type: 'Bearer'
-  expires_in: number
-  refresh_expires_in: number
+  access_token?: string
+  refresh_token?: string
+  token_type?: 'Bearer'
+  expires_in?: number
+  refresh_expires_in?: number
+  message?: string
+  requires_two_factor?: boolean
 }
 
 export interface MeResponse {

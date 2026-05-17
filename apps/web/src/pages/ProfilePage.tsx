@@ -52,6 +52,11 @@ export function ProfilePage() {
   async function handlePasswordRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
+    if (pendingPurpose === 'password_change') {
+      await handleConfirm(event)
+      return
+    }
+
     try {
       const response = await systemService.requestProfileChange({
         password,
@@ -87,6 +92,10 @@ export function ProfilePage() {
       setUser(updatedUser)
       setToken('')
       setPendingPurpose('')
+      if (pendingPurpose === 'password_change') {
+        setPassword('')
+        setPasswordConfirmation('')
+      }
       addToast({
         tone: 'success',
         title: 'Alteração confirmada',
@@ -203,8 +212,18 @@ export function ProfilePage() {
               value={passwordConfirmation}
               onChange={(event) => setPasswordConfirmation(event.target.value)}
             />
+            {pendingPurpose === 'password_change' ? (
+              <input
+                autoComplete="one-time-code"
+                inputMode="numeric"
+                maxLength={6}
+                onChange={(event) => setToken(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="Código recebido por e-mail"
+                value={token}
+              />
+            ) : null}
             <button className="primary-button" type="submit">
-              Solicitar troca segura
+              {pendingPurpose === 'password_change' ? 'Confirmar alteração' : 'Solicitar troca segura'}
             </button>
           </form>
         </section>
@@ -229,7 +248,7 @@ export function ProfilePage() {
           </article>
         </section>
 
-        {pendingPurpose ? (
+        {pendingPurpose && pendingPurpose !== 'password_change' ? (
           <form
             className="management-panel panel security-confirm"
             onSubmit={(event) => {

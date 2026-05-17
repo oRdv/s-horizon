@@ -192,7 +192,7 @@ export function DashboardPage() {
       <section className="dashboard-grid">
         <div className="dashboard-grid__primary">
           <WidgetFrame
-            subtitle="Lista baseada apenas em servicos reais."
+            subtitle="Lista baseada apenas em serviços reais."
             title="Próximos serviços"
           >
             <ServicesPanel services={overview.upcomingServices} />

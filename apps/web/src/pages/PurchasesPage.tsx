@@ -5,6 +5,7 @@ import { useSessionStore } from '@/store/useSessionStore'
 
 export function PurchasesPage() {
   const user = useSessionStore((state) => state.user)
+  const isBooster = user?.role === 'booster'
 
   async function handleLogout() {
     await authService.logout()
@@ -15,10 +16,11 @@ export function PurchasesPage() {
       <div className="purchases-page">
         <section className="purchase-section" id="novo-pedido">
           <PricingBuilder
-            description="Escolha o formato, ajuste o elo atual e o destino final. O valor aparece no resumo antes de você fechar."
-            eyebrow="Novo pedido"
-            showReferenceTable={false}
-            title="Escolha o serviço e monte sua rota"
+            canCheckout={!isBooster}
+            description="Escolha o formato, ajuste o elo atual e o destino final. O valor aparece no resumo antes de fechar."
+            eyebrow={isBooster ? 'Consulta de preços' : 'Novo pedido'}
+            showReferenceTable={isBooster}
+            title={isBooster ? 'Tabela de preços para consulta' : 'Escolha o serviço e monte sua rota'}
           />
         </section>
       </div>

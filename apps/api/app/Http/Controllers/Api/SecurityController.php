@@ -20,7 +20,7 @@ class SecurityController extends Controller
         $issued = $securityTokens->issue($user, $user->email, SecurityTokenPurpose::EmailVerification, request: $request);
 
         return response()->json([
-            'message' => 'Enviamos um token de verificação para seu email.',
+            'message' => 'Enviamos um token de verificação para seu e-mail.',
             'data' => [
                 'security' => $securityTokens->exposeForLocalDevelopment($issued),
             ],
@@ -48,7 +48,7 @@ class SecurityController extends Controller
         $audit->record('security.email_verified', $user, $user, $request, $user);
 
         return response()->json([
-            'message' => 'Email verificado com sucesso.',
+            'message' => 'E-mail verificado com sucesso.',
             'data' => [
                 'user' => $user->refresh(),
             ],

@@ -39,17 +39,17 @@ function writePreferences(preferences: DashboardPreferences): void {
 export const dashboardService = {
   async getOverview(userName?: string): Promise<DashboardOverview> {
     const preferences = readPreferences()
-    const displayName = userName?.split(' ')[0] ?? 'usuario'
+    const displayName = userName?.split(' ')[0] ?? 'usuário'
 
     return {
-      headline: `Controle a operacao do ${displayName} com uma visao clara do mes.`,
+      headline: `Controle a operação do ${displayName} com uma visão clara do mês.`,
       status: preferences.status,
       monthlyGoal: preferences.monthlyGoal,
       monthEarnings: {
         total: 0,
         delta: 0,
         series: [],
-        note: 'Sem historico real registrado ainda.',
+        note: 'Sem histórico real registrado ainda.',
       },
       upcomingServices: [],
     }

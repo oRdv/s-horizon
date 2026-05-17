@@ -7,6 +7,4 @@ return [
     'max_credit_installments' => (int) env('PAYMENT_MAX_CREDIT_INSTALLMENTS', 2),
     'frontend_url' => env('FRONTEND_URL', env('VITE_APP_URL', 'https://horizonboost.com.br')),
     'backend_url' => env('BACKEND_URL', env('APP_URL', 'https://api.horizonboost.com.br')),
-    'test_mode' => env('PAYMENT_TEST_MODE', false),
-    'force_next_pix_amount_cents' => env('PAYMENT_FORCE_NEXT_PIX_AMOUNT_CENTS'),
 ];

@@ -125,7 +125,7 @@ async function performRefresh(): Promise<string | null> {
 
     setSession(response.data)
 
-    return response.data.access_token
+    return response.data.access_token ?? null
   } catch {
     clearSession()
 

@@ -45,7 +45,7 @@ export function AppShell({ userName, onLogout, children }: AppShellProps) {
               Usuários
             </NavLink>
           ) : null}
-          {user?.role === 'customer' ? (
+          {user?.role === 'customer' || user?.role === 'booster' ? (
             <>
               <NavLink
                 to="/purchases"
@@ -53,12 +53,14 @@ export function AppShell({ userName, onLogout, children }: AppShellProps) {
               >
                 Preços
               </NavLink>
-              <NavLink
-                to="/orders"
-                className={({ isActive }) => `dashboard-shell__nav-link${isActive ? ' is-active' : ''}`}
-              >
-                Meus pedidos
-              </NavLink>
+              {user?.role === 'customer' ? (
+                <NavLink
+                  to="/orders"
+                  className={({ isActive }) => `dashboard-shell__nav-link${isActive ? ' is-active' : ''}`}
+                >
+                  Meus pedidos
+                </NavLink>
+              ) : null}
             </>
           ) : null}
           {user?.role === 'booster' ? (

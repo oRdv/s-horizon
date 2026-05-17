@@ -54,7 +54,7 @@ export function getApiErrorMessages(error: unknown, fallback: string): string[] 
   }
 
   if (!error.response) {
-    return ['Nao foi possivel conectar ao servidor. Verifique se a API esta rodando.']
+    return ['Não foi possível conectar ao servidor. Verifique se a API está rodando.']
   }
 
   return [fallback]
@@ -68,7 +68,7 @@ function translateValidationMessage(field: string, message: string): string {
     normalized.includes('ja esta cadastrado') ||
     normalized.includes('já está cadastrado')
   ) {
-    return 'Este e-mail ja esta cadastrado. Tente entrar ou use outro e-mail.'
+    return 'Este e-mail já está cadastrado. Tente entrar ou use outro e-mail.'
   }
 
   if (normalized.includes('at least 8') || normalized.includes('pelo menos 8')) {
@@ -76,7 +76,7 @@ function translateValidationMessage(field: string, message: string): string {
   }
 
   if (normalized.includes('confirmation') || normalized.includes('confirmacao') || normalized.includes('confirmação')) {
-    return 'A confirmacao da senha nao confere.'
+    return 'A confirmação da senha não confere.'
   }
 
   if (normalized.includes('valid email') || normalized.includes('email valido')) {
@@ -106,7 +106,7 @@ function translateGenericMessage(message: string): string {
     normalized.includes('badcredentials') ||
     normalized.includes('username and password not accepted')
   ) {
-    return 'Nao conseguimos enviar o e-mail agora. Verifique a configuracao SMTP da Horizon Boost.'
+    return 'Não conseguimos enviar o e-mail agora. Verifique a configuração SMTP da Horizon Boost.'
   }
 
   if (
@@ -117,7 +117,7 @@ function translateGenericMessage(message: string): string {
     normalized.includes('db_password') ||
     normalized.includes('database')
   ) {
-    return 'Nao foi possivel conectar ao banco de dados da Horizon Boost. Verifique a configuracao do servidor.'
+    return 'Não foi possível conectar ao banco de dados da Horizon Boost. Verifique a configuração do servidor.'
   }
 
   if (normalized.includes('the given data was invalid')) {

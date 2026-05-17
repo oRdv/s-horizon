@@ -27,6 +27,8 @@ class DatabaseSeeder extends Seeder
             'permissions' => null,
             'is_active' => true,
             'email_verified_at' => now(),
+            'two_factor_enabled' => true,
+            'two_factor_confirmed_at' => now(),
             'approved_at' => now(),
         ]);
     }

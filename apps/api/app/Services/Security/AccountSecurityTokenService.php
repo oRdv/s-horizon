@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -46,7 +47,7 @@ final class AccountSecurityTokenService
             'user_agent' => $request?->userAgent(),
         ]);
 
-        $this->send($email, $purpose, $token);
+        $this->send($email, $purpose, $token, $ttlMinutes);
 
         return [
             'record' => $record,
@@ -76,7 +77,7 @@ final class AccountSecurityTokenService
 
         if (! $record || $record->isExpired() || ! Hash::check($token, $record->token_hash)) {
             throw ValidationException::withMessages([
-                'token' => ['O token informado e invalido ou expirou.'],
+                'token' => ['O token informado é inválido ou expirou.'],
             ]);
         }
 
@@ -104,7 +105,7 @@ final class AccountSecurityTokenService
         ];
     }
 
-    private function send(string $email, SecurityTokenPurpose $purpose, string $token): void
+    private function send(string $email, SecurityTokenPurpose $purpose, string $token, int $ttlMinutes): void
     {
         $context = [
             'email_hash' => hash('sha256', strtolower($email)),
@@ -120,19 +121,50 @@ final class AccountSecurityTokenService
 
         $subject = match ($purpose) {
             SecurityTokenPurpose::EmailVerification => 'Confirme seu cadastro na Horizon Boost',
-            SecurityTokenPurpose::ProfileChange => 'Confirme a alteracao do seu perfil',
+            SecurityTokenPurpose::ProfileChange => 'Confirme a alteração do seu perfil',
             SecurityTokenPurpose::PasswordChange => 'Confirme a troca de senha',
-            SecurityTokenPurpose::TwoFactorSetup => 'Confirme a autenticacao em duas etapas',
-            SecurityTokenPurpose::TwoFactorLogin => 'Codigo de login em duas etapas',
+            SecurityTokenPurpose::TwoFactorSetup => 'Confirme a autenticação em duas etapas',
+            SecurityTokenPurpose::TwoFactorLogin => 'Código de login em duas etapas',
         };
 
-        Mail::raw(
-            "Seu codigo Horizon Boost e {$token}. Ele expira em 30 minutos.",
+        $html = View::make('emails.security-token', [
+            'subject' => $subject,
+            'headline' => $this->headlineFor($purpose),
+            'intro' => $this->introFor($purpose),
+            'token' => $token,
+            'expiresInMinutes' => $ttlMinutes,
+            'frontendUrl' => config('payments.frontend_url'),
+        ])->render();
+
+        Mail::html(
+            $html,
             static function ($message) use ($email, $subject): void {
                 $message->to($email)->subject($subject);
             },
         );
 
         Log::info('mail.security_token_send_success', $context);
+    }
+
+    private function headlineFor(SecurityTokenPurpose $purpose): string
+    {
+        return match ($purpose) {
+            SecurityTokenPurpose::EmailVerification => 'Confirme seu cadastro',
+            SecurityTokenPurpose::ProfileChange => 'Confirme a alteração',
+            SecurityTokenPurpose::PasswordChange => 'Confirme sua nova senha',
+            SecurityTokenPurpose::TwoFactorSetup => 'Ative a proteção extra',
+            SecurityTokenPurpose::TwoFactorLogin => 'Confirme seu login',
+        };
+    }
+
+    private function introFor(SecurityTokenPurpose $purpose): string
+    {
+        return match ($purpose) {
+            SecurityTokenPurpose::EmailVerification => 'Use o código abaixo para verificar seu e-mail e liberar sua conta na Horizon Boost.',
+            SecurityTokenPurpose::ProfileChange => 'Recebemos uma solicitação para alterar dados da sua conta. Use o código abaixo para confirmar.',
+            SecurityTokenPurpose::PasswordChange => 'Use o código abaixo para confirmar a troca de senha da sua conta.',
+            SecurityTokenPurpose::TwoFactorSetup => 'Use o código abaixo para concluir a ativação da autenticação em duas etapas.',
+            SecurityTokenPurpose::TwoFactorLogin => 'Use o código abaixo para concluir o acesso seguro à sua conta.',
+        };
     }
 }

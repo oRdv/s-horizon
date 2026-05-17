@@ -5732,6 +5732,177 @@ p {
   color: var(--text-muted);
 }
 
+.client-dashboard-panel {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+  padding: clamp(1rem, 2.5vw, 1.45rem);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(207, 51, 51, 0.16), transparent 36%),
+    linear-gradient(145deg, rgba(35, 23, 23, 0.96), rgba(16, 12, 12, 0.94));
+}
+
+.client-dashboard-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.client-dashboard-panel__header h2 {
+  margin: 0.2rem 0 0;
+  font-size: clamp(1.45rem, 3vw, 2.15rem);
+  line-height: 1;
+  letter-spacing: -0.055em;
+}
+
+.client-dashboard-panel__header > svg {
+  color: var(--accent);
+}
+
+.ghost-button--compact {
+  min-height: 2.45rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 14px;
+  white-space: nowrap;
+}
+
+.client-order-list,
+.client-payment-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.client-dashboard-order,
+.client-payment-card {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(207, 51, 51, 0.34);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015)),
+    rgba(12, 10, 10, 0.72);
+}
+
+.client-dashboard-order {
+  grid-template-columns: minmax(0, 1fr) minmax(175px, 0.42fr);
+  align-items: center;
+}
+
+.client-dashboard-order__main,
+.client-payment-card__copy {
+  display: grid;
+  gap: 0.42rem;
+  min-width: 0;
+}
+
+.client-dashboard-order strong,
+.client-payment-card strong {
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.client-dashboard-order p,
+.client-payment-card p {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.client-dashboard-order__meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.client-dashboard-order__meta div,
+.client-payment-card__amount {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.72rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.client-dashboard-order__meta span,
+.client-payment-card__amount span {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.client-payment-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.client-payment-card__amount {
+  min-width: 110px;
+  text-align: right;
+}
+
+.client-status-pill {
+  width: fit-content;
+  padding: 0.32rem 0.58rem;
+  border-radius: 999px;
+  color: #f8d2d2;
+  background: rgba(207, 51, 51, 0.18);
+  border: 1px solid rgba(207, 51, 51, 0.32);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.client-status-pill.is-success {
+  color: #b9f6d0;
+  background: rgba(42, 160, 94, 0.16);
+  border-color: rgba(42, 160, 94, 0.34);
+}
+
+.client-status-pill.is-active {
+  color: #ffe2ac;
+  background: rgba(221, 153, 42, 0.15);
+  border-color: rgba(221, 153, 42, 0.34);
+}
+
+.client-status-pill.is-danger {
+  color: #ffc0c0;
+  background: rgba(220, 38, 38, 0.16);
+  border-color: rgba(220, 38, 38, 0.36);
+}
+
+.client-empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  padding: 2rem 1rem;
+  text-align: center;
+  border: 1px dashed rgba(207, 51, 51, 0.34);
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.client-empty-state svg {
+  color: var(--accent);
+}
+
+.client-empty-state strong {
+  font-size: 1.05rem;
+}
+
+.client-empty-state p {
+  max-width: 32rem;
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
 .master-dashboard-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 0.36fr);
@@ -7455,6 +7626,18 @@ p {
   flex: 1 1 220px;
 }
 
+.form-helper {
+  margin: -0.15rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.form-helper.is-loading {
+  color: var(--text-soft);
+}
+
 .security-confirm {
   border-color: color-mix(in srgb, var(--accent) 36%, var(--border));
 }
@@ -7519,6 +7702,21 @@ p {
 
   .payment-preview-item > div:last-child {
     justify-items: start;
+    text-align: left;
+  }
+
+  .client-dashboard-panel__header {
+    flex-direction: column;
+  }
+
+  .client-dashboard-order,
+  .client-payment-card,
+  .client-dashboard-order__meta {
+    grid-template-columns: 1fr;
+  }
+
+  .client-payment-card__amount {
+    min-width: 0;
     text-align: left;
   }
 

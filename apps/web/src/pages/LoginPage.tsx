@@ -7,7 +7,7 @@ import { BrandIcon } from '@/components/BrandIcon'
 import { BrandMark } from '@/components/BrandMark'
 import { PasswordField } from '@/components/PasswordField'
 import { getApiErrorMessage } from '@/services/api/errors'
-import { authService } from '@/services/auth'
+import { authService, TwoFactorRequiredError } from '@/services/auth'
 import { useToastStore } from '@/store/useToastStore'
 
 export function LoginPage() {
@@ -15,6 +15,8 @@ export function LoginPage() {
   const addToast = useToastStore((state) => state.addToast)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [twoFactorCode, setTwoFactorCode] = useState('')
+  const [requiresTwoFactor, setRequiresTwoFactor] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -41,9 +43,26 @@ export function LoginPage() {
     }
 
     try {
-      const user = await authService.login({ email: normalizedEmail, password })
+      const user = await authService.login({
+        email: normalizedEmail,
+        password,
+        two_factor_code: requiresTwoFactor ? twoFactorCode : undefined,
+      })
+      setRequiresTwoFactor(false)
+      setTwoFactorCode('')
       navigate(user.email_verified_at ? '/dashboard' : '/verify-email', { replace: true })
     } catch (error: unknown) {
+      if (error instanceof TwoFactorRequiredError) {
+        setRequiresTwoFactor(true)
+        setTwoFactorCode('')
+        addToast({
+          tone: 'success',
+          title: 'Código enviado',
+          description: 'Enviamos o código de autenticação para seu e-mail.',
+        })
+        return
+      }
+
       const message = getApiErrorMessage(
         error,
         'Não foi possível autenticar. Confira e-mail e senha.',
@@ -114,10 +133,24 @@ export function LoginPage() {
                 />
               </div>
 
+              {requiresTwoFactor ? (
+                <div className="form-group">
+                  <input
+                    autoComplete="one-time-code"
+                    className="simple-input"
+                    inputMode="numeric"
+                    maxLength={6}
+                    onChange={(event) => setTwoFactorCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="Código de 2FA"
+                    value={twoFactorCode}
+                  />
+                </div>
+              ) : null}
+
               {error ? <p className="form-error">{error}</p> : null}
 
               <button className="login-submit" disabled={isSubmitting} type="submit">
-                {isSubmitting ? 'Entrando...' : 'Acessar'}
+                {isSubmitting ? 'Entrando...' : requiresTwoFactor ? 'Confirmar código' : 'Acessar'}
                 {!isSubmitting && <ArrowRight size={18} strokeWidth={2} />}
               </button>
             </form>

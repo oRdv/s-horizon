@@ -6,6 +6,7 @@ use App\Enums\PaymentMethod;
 use App\Enums\PaymentProvider;
 use App\Enums\PaymentStatus;
 use App\Enums\ServiceOrderStatus;
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Models\ServiceOrder;
@@ -54,7 +55,7 @@ class PaymentController extends Controller
         $boost = $orders->findBoostForUser($boostId, (int) $user->getKey());
 
         if (! $boost) {
-            return $this->error('Boost nao encontrado para o usuario autenticado.', 404);
+            return $this->error('Boost não encontrado para o usuário autenticado.', 404);
         }
 
         return response()->json([
@@ -70,6 +71,10 @@ class PaymentController extends Controller
         /** @var User $user */
         $user = $request->user();
 
+        if ($user->role !== UserRole::Customer->value) {
+            return $this->error('Apenas clientes podem finalizar pedidos e criar pagamentos.', 403, 'PAYMENT_FORBIDDEN');
+        }
+
         $validated = $request->validate([
             'boostId' => ['required', 'integer'],
             'orderId' => ['required', 'integer'],
@@ -81,7 +86,7 @@ class PaymentController extends Controller
         $order = $orders->findOwnedOrder((int) $validated['orderId'], (int) $user->getKey());
 
         if (! $boost || ! $order) {
-            return $this->error('Boost ou pedido nao encontrado para o usuario autenticado.', 404);
+            return $this->error('Boost ou pedido não encontrado para o usuário autenticado.', 404);
         }
 
         try {
@@ -99,7 +104,7 @@ class PaymentController extends Controller
         } catch (Throwable $exception) {
             Log::error('payments.create_failed', ['message' => $exception->getMessage()]);
 
-            $message = 'Nao foi possivel criar o pagamento real no provedor.';
+            $message = 'Não foi possível criar o pagamento real no provedor.';
             if (config('app.debug')) {
                 $message .= ' ' . $exception->getMessage();
             }
@@ -122,17 +127,10 @@ class PaymentController extends Controller
         $payment = $payments->findForUser($paymentId, (int) $user->getKey());
 
         if (! $payment) {
-            return $this->error('Pagamento nao encontrado para o usuario autenticado.', 404);
+            return $this->error('Pagamento não encontrado para o usuário autenticado.', 404);
         }
 
-        if (
-            $payment->method === PaymentMethod::Pix->value
-            && $payment->status === PaymentStatus::WaitingPayment->value
-            && $payment->expires_at
-            && $payment->expires_at->isPast()
-        ) {
-            $paymentService->markFailed($payment, PaymentStatus::Expired);
-        } elseif (in_array($payment->status, [
+        if (in_array($payment->status, [
             PaymentStatus::WaitingPayment->value,
             PaymentStatus::RequiresAction->value,
             PaymentStatus::Processing->value,
@@ -145,6 +143,15 @@ class PaymentController extends Controller
                     'provider' => $payment->provider,
                     'message' => $exception->getMessage(),
                 ]);
+
+                if (
+                    $payment->method === PaymentMethod::Pix->value
+                    && $payment->status === PaymentStatus::WaitingPayment->value
+                    && $payment->expires_at
+                    && $payment->expires_at->isPast()
+                ) {
+                    $payment = $paymentService->markFailed($payment, PaymentStatus::Expired);
+                }
             }
         }
 
@@ -229,7 +236,7 @@ class PaymentController extends Controller
         } catch (Throwable $exception) {
             Log::error('payments.mercado_pago_fetch_failed', ['message' => $exception->getMessage()]);
 
-            return $this->error('Nao foi possivel consultar o pagamento no Mercado Pago.', 502);
+            return $this->error('Não foi possível consultar o pagamento no Mercado Pago.', 502);
         }
 
         $payment = $payments->findByProviderPaymentId($providerPaymentId);
@@ -251,6 +258,10 @@ class PaymentController extends Controller
     {
         /** @var User $user */
         $user = $request->user();
+
+        if ($user->role !== UserRole::Customer->value) {
+            return $this->error('Apenas clientes podem finalizar pedidos e criar pagamentos.', 403, 'PAYMENT_FORBIDDEN');
+        }
 
         $validated = $request->validate([
             'service_type' => ['required', 'string', 'max:80'],

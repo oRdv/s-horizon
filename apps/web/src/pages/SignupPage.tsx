@@ -88,7 +88,7 @@ export function SignupPage() {
         title: 'Conta criada',
         description: 'Enviamos um código para confirmar seu e-mail antes de liberar o painel.',
       })
-      navigate('/verify-email', { replace: true })
+      navigate('/verify-email', { replace: true, state: { verificationCodeAlreadySent: true } })
     } catch (error: unknown) {
       const message = getApiErrorMessage(
         error,

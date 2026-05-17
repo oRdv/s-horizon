@@ -64,7 +64,7 @@ class AuthController extends Controller
             });
         } catch (TransportExceptionInterface) {
             return response()->json([
-                'message' => 'Nao conseguimos enviar o e-mail agora. Verifique a configuracao SMTP da Horizon Boost.',
+                'message' => 'Não conseguimos enviar o e-mail agora. Verifique a configuração SMTP da Horizon Boost.',
             ], 503);
         }
     }
@@ -94,7 +94,7 @@ class AuthController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'As credenciais informadas sao invalidas.',
+                'message' => 'As credenciais informadas são inválidas.',
             ], 401);
         }
 
@@ -106,7 +106,7 @@ class AuthController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'Sua conta esta desativada. Fale com o suporte.',
+                'message' => 'Sua conta está desativada. Fale com o suporte.',
             ], 403);
         }
 
@@ -123,7 +123,7 @@ class AuthController extends Controller
                 );
 
                 return response()->json([
-                    'message' => 'Enviamos um codigo de autenticacao em duas etapas para seu email.',
+                    'message' => 'Enviamos um código de autenticação em duas etapas para seu e-mail.',
                     'requires_two_factor' => true,
                     'data' => [
                         'security' => $securityTokens->exposeForLocalDevelopment($issued),
@@ -182,7 +182,7 @@ class AuthController extends Controller
         $tokenPairService->revoke($request->string('refresh_token')->toString());
 
         return response()->json([
-            'message' => 'Sessao encerrada com sucesso.',
+            'message' => 'Sessão encerrada com sucesso.',
         ]);
     }
 

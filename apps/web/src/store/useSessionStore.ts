@@ -24,9 +24,9 @@ export const useSessionStore = create<SessionState>()(
       markHydrated: () => set({ hydrated: true }),
       setSession: (payload) =>
         set({
-          user: payload.data.user,
-          accessToken: payload.access_token,
-          refreshToken: payload.refresh_token,
+          user: payload.data.user ?? null,
+          accessToken: payload.access_token ?? null,
+          refreshToken: payload.refresh_token ?? null,
         }),
       setUser: (user) => set({ user }),
       clearSession: () =>

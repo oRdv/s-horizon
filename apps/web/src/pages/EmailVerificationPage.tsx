@@ -1,7 +1,7 @@
 import type { FormEvent } from 'react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ArrowRight, LogOut, MailCheck, RotateCcw, ShieldCheck } from 'lucide-react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 
 import { BrandIcon } from '@/components/BrandIcon'
 import { BrandMark } from '@/components/BrandMark'
@@ -13,13 +13,67 @@ import { useToastStore } from '@/store/useToastStore'
 
 export function EmailVerificationPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const user = useSessionStore((state) => state.user)
   const setUser = useSessionStore((state) => state.setUser)
   const addToast = useToastStore((state) => state.addToast)
   const [token, setToken] = useState('')
   const [isConfirming, setIsConfirming] = useState(false)
+  const [isAutoSending, setIsAutoSending] = useState(false)
   const [isResending, setIsResending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [sendStatus, setSendStatus] = useState<string | null>(null)
+  const autoSendStartedRef = useRef(false)
+  const verificationCodeAlreadySent =
+    typeof location.state === 'object' &&
+    location.state !== null &&
+    'verificationCodeAlreadySent' in location.state &&
+    Boolean(location.state.verificationCodeAlreadySent)
+
+  useEffect(() => {
+    if (!user || user.email_verified_at || autoSendStartedRef.current) {
+      return
+    }
+
+    const storageKey = `horizon-email-verification-sent:${user.id}:${user.email}`
+    const lastSentAt = Number(window.sessionStorage.getItem(storageKey) ?? 0)
+    const recentlySent = Date.now() - lastSentAt < 90_000
+
+    if (verificationCodeAlreadySent || recentlySent) {
+      setSendStatus('Código enviado para seu e-mail.')
+      return
+    }
+
+    autoSendStartedRef.current = true
+    setIsAutoSending(true)
+    setError(null)
+    setSendStatus('Enviando código para seu e-mail...')
+
+    systemService
+      .requestEmailVerification()
+      .then(() => {
+        window.sessionStorage.setItem(storageKey, String(Date.now()))
+        setSendStatus('Código enviado automaticamente para seu e-mail.')
+        addToast({
+          tone: 'success',
+          title: 'Código enviado',
+          description: 'Enviamos o código de verificação para seu e-mail.',
+        })
+      })
+      .catch((error: unknown) => {
+        const message = getApiErrorMessage(error, 'Não foi possível enviar o código automaticamente.')
+        setError(message)
+        setSendStatus(null)
+        addToast({
+          tone: 'error',
+          title: 'Falha ao enviar código',
+          description: message,
+        })
+      })
+      .finally(() => {
+        setIsAutoSending(false)
+      })
+  }, [addToast, user, verificationCodeAlreadySent])
 
   if (user?.email_verified_at) {
     return <Navigate replace to="/dashboard" />
@@ -75,6 +129,10 @@ export function EmailVerificationPage() {
 
     try {
       await systemService.requestEmailVerification()
+      if (user) {
+        window.sessionStorage.setItem(`horizon-email-verification-sent:${user.id}:${user.email}`, String(Date.now()))
+      }
+      setSendStatus('Novo código enviado para seu e-mail.')
       addToast({
         tone: 'success',
         title: 'Código reenviado',
@@ -142,6 +200,9 @@ export function EmailVerificationPage() {
                 />
               </label>
 
+              {sendStatus ? (
+                <p className={`form-helper${isAutoSending ? ' is-loading' : ''}`}>{sendStatus}</p>
+              ) : null}
               {error ? <p className="form-error">{error}</p> : null}
 
               <button className="login-submit" disabled={isConfirming} type="submit">

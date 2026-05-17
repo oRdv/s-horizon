@@ -30,6 +30,7 @@ import {
   formatTierDivision,
   formatTierSubtitle,
   gameCatalog,
+  getEloHighBoostReferenceLabel,
   getGameLabel,
   getGameTiers,
   getFixedPriceValue,
@@ -46,6 +47,7 @@ import {
 import { getApiErrorMessage } from '@/services/api/errors'
 import { getLolChampionOptions, type LolChampionOption } from '@/services/riot'
 import { systemService } from '@/services/system'
+import { useSessionStore } from '@/store/useSessionStore'
 import { useToastStore } from '@/store/useToastStore'
 import type {
   PaymentGatewayPayload,
@@ -122,6 +124,7 @@ type PaymentWizardStep = 'summary' | 'method' | 'card' | 'pixConfirm' | 'pixQr' 
 type TerminalPaymentStatus = 'PAID' | 'FAILED' | 'EXPIRED' | 'REFUNDED' | 'CANCELLED'
 
 const terminalPaymentStatuses = new Set<string>(['PAID', 'FAILED', 'EXPIRED', 'REFUNDED', 'CANCELLED'])
+const pixCountdownDurationMs = 30 * 60 * 1000
 
 function normalizePixQrImageSource(qrCodeBase64?: string | null, generatedDataUrl?: string | null): string | null {
   const trimmedBase64 = qrCodeBase64?.trim()
@@ -607,7 +610,7 @@ function StripeCardPaymentForm(props: {
     })
 
     if (result.error) {
-      setCardError(result.error.message ?? 'A Stripe nao conseguiu confirmar o pagamento.')
+      setCardError(result.error.message ?? 'A Stripe não conseguiu confirmar o pagamento.')
       setIsSubmitting(false)
       return
     }
@@ -690,6 +693,7 @@ function PaymentWizardModal(props: {
   const [installments, setInstallments] = useState(1)
   const [checkout, setCheckout] = useState<PaymentCheckoutState | null>(null)
   const [currentTime, setCurrentTime] = useState(() => Date.now())
+  const [pixCountdownEndsAt, setPixCountdownEndsAt] = useState<number | null>(null)
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
   const [isBusy, setIsBusy] = useState(false)
@@ -705,8 +709,7 @@ function PaymentWizardModal(props: {
   const qrCodeBase64 = checkout?.gateway.qrCodeBase64 ?? null
   const qrCodeImageSrc = normalizePixQrImageSource(qrCodeBase64, qrCodeDataUrl)
   const expiresAt = checkout?.gateway.expiresAt ?? checkout?.transaction.expiresAt ?? null
-  const expiresAtMs = expiresAt ? new Date(expiresAt).getTime() : null
-  const remainingMs = expiresAtMs ? Math.max(0, expiresAtMs - currentTime) : null
+  const remainingMs = pixCountdownEndsAt ? Math.max(0, pixCountdownEndsAt - currentTime) : null
 
   useEffect(() => {
     if (!open) return
@@ -736,6 +739,7 @@ function PaymentWizardModal(props: {
       setSelectedMethod(null)
       setInstallments(1)
       setCheckout(null)
+      setPixCountdownEndsAt(null)
       setQrCodeDataUrl(null)
       setStatus(null)
       setError(null)
@@ -764,10 +768,10 @@ function PaymentWizardModal(props: {
   }, [checkout, qrCodeBase64, qrCodePayload, step])
 
   useEffect(() => {
-    if (!expiresAtMs || step !== 'pixQr') return
+    if (step !== 'pixQr') return
     const interval = window.setInterval(() => setCurrentTime(Date.now()), 1000)
     return () => window.clearInterval(interval)
-  }, [expiresAtMs, step])
+  }, [step])
 
   useEffect(() => {
     if (!checkout || (step !== 'pixQr' && step !== 'status')) return
@@ -918,6 +922,8 @@ function PaymentWizardModal(props: {
 
       setCheckout({ gateway: normalizedGateway, order, transaction })
       setStatus(normalizedGateway.status ?? transaction.status ?? null)
+      setCurrentTime(Date.now())
+      setPixCountdownEndsAt(method === 'PIX' ? Date.now() + pixCountdownDurationMs : null)
       onOrderCreated?.({ order, transaction })
       setStep(method === 'PIX' ? 'pixQr' : 'card')
     } catch (requestError: unknown) {
@@ -933,17 +939,20 @@ function PaymentWizardModal(props: {
 
     try {
       await navigator.clipboard.writeText(pixCopyPaste)
-      addToast({ tone: 'success', title: 'Codigo copiado', description: 'Cole no app do banco para pagar.' })
+      addToast({ tone: 'success', title: 'Código copiado', description: 'Cole no app do banco para pagar.' })
     } catch {
       addToast({ tone: 'error', title: 'Não foi possível copiar', description: 'Copie o código manualmente.' })
     }
   }
 
   function handleGenerateNewPix() {
+    setOrder(null)
     setCheckout(null)
     setStatus(null)
     setQrCodeDataUrl(null)
+    setPixCountdownEndsAt(null)
     setPollingError(null)
+    createPaymentInFlightRef.current = false
     setStep('pixConfirm')
   }
 
@@ -1128,7 +1137,7 @@ function PaymentWizardModal(props: {
                 <span>Aguardando pagamento</span>
               </div>
               <label className="payment-wizard__copy-block">
-                <span>Codigo PIX</span>
+                <span>Código PIX</span>
                 <textarea readOnly rows={5} value={pixCopyPaste ?? ''} />
               </label>
               {pollingError ? <div className="payment-wizard__alert payment-wizard__alert--soft">{pollingError}</div> : null}
@@ -1138,7 +1147,7 @@ function PaymentWizardModal(props: {
               </div>
               <button className="primary-button primary-button--crimson" disabled={!pixCopyPaste} onClick={() => void handleCopyPixCode()} type="button">
                 <Copy size={16} />
-                Copiar codigo PIX
+                Copiar código PIX
               </button>
             </div>
           </div>
@@ -1256,6 +1265,8 @@ export function PricingBuilder({
   onOrderCreated,
 }: PricingBuilderProps) {
   const addToast = useToastStore((state) => state.addToast)
+  const user = useSessionStore((state) => state.user)
+  const accessToken = useSessionStore((state) => state.accessToken)
   const [game] = useState<GameKey>('lol')
   const [mode, setMode] = useState<PriceMode>('solo')
   const [currentTier, setCurrentTier] = useState<RankTier>('silver')
@@ -1278,7 +1289,11 @@ export function PricingBuilder({
   const gameMeta = gameCatalog[game]
   const gameTiers = useMemo(() => getGameTiers(game), [game])
   const isDivisionMode = activeFamily === 'boost'
-  const builderSteps = isDivisionMode ? divisionSteps : defaultSteps
+  const builderSteps = useMemo(() => {
+    const steps = isDivisionMode ? divisionSteps : defaultSteps
+
+    return canCheckout ? steps : steps.filter((step) => step.title !== 'Pagamento')
+  }, [canCheckout, isDivisionMode])
   const quote = isDivisionMode
     ? createBoostQuote({
         mode: mode as Extract<PriceMode, 'solo' | 'duo' | 'flex'>,
@@ -1597,6 +1612,16 @@ export function PricingBuilder({
       return
     }
 
+    if (!user || !accessToken) {
+      addToast({
+        tone: 'error',
+        title: 'Entre para comprar',
+        description: 'Faça login ou crie sua conta antes de gerar o pagamento.',
+      })
+      window.location.href = '/login'
+      return
+    }
+
     setIsPaymentWizardOpen(true)
   }
 
@@ -1735,7 +1760,7 @@ export function PricingBuilder({
                       <strong>{currentRow.label}</strong>
                     </div>
                   ) : (
-                    <div className="pricing-division-pills" role="list" aria-label="Divisao atual">
+                    <div className="pricing-division-pills" role="list" aria-label="Divisão atual">
                       {rankDivisions.map((division) => (
                         <button
                           key={division}
@@ -1800,7 +1825,7 @@ export function PricingBuilder({
                         <strong>{targetRow.label}</strong>
                       </div>
                     ) : (
-                      <div className="pricing-division-pills" role="list" aria-label="Divisao desejada">
+                      <div className="pricing-division-pills" role="list" aria-label="Divisão desejada">
                         {rankDivisions.map((division) => (
                           <button
                             key={division}
@@ -2198,7 +2223,7 @@ export function PricingBuilder({
                     {row.label}
                     <small>{row.stepType === 'single' ? 'Tier único' : '4 divisões'}</small>
                   </strong>
-                  <span>{formatCurrency(getFixedPriceValue(row.solo))}</span>
+                  <span>{getEloHighBoostReferenceLabel(row.tier)}</span>
                   <span>{formatCurrency(getFixedPriceValue(row.duo))}</span>
                   <span>{formatCurrency(getFixedPriceValue(row.wins))}</span>
                   <span>{formatCurrency(getFixedPriceValue(row.md5Package))}</span>

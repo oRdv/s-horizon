@@ -72,6 +72,45 @@ class AuthFlowTest extends TestCase
             ->assertJsonPath('data.user.email', $user->email);
     }
 
+    public function test_two_factor_user_must_confirm_email_code_to_login(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'admin-2fa@horizonboost.gg',
+            'password' => 'Horizon123!',
+            'is_active' => true,
+            'two_factor_enabled' => true,
+            'two_factor_confirmed_at' => now(),
+        ]);
+
+        $challengeResponse = $this->postJson('/api/auth/login', [
+            'email' => $user->email,
+            'password' => 'Horizon123!',
+        ]);
+
+        $challengeResponse
+            ->assertAccepted()
+            ->assertJsonPath('requires_two_factor', true)
+            ->assertJsonPath('data.security.token_sent', true);
+
+        $this->postJson('/api/auth/login', [
+            'email' => $user->email,
+            'password' => 'Horizon123!',
+            'two_factor_code' => $challengeResponse->json('data.security.dev_token'),
+        ])->assertOk()
+            ->assertJsonPath('data.user.email', $user->email);
+    }
+
+    public function test_seeded_master_admin_starts_with_two_factor_enabled(): void
+    {
+        $this->seed();
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'boosthorizon@gmail.com',
+            'role' => UserRole::MasterAdmin->value,
+            'two_factor_enabled' => true,
+        ]);
+    }
+
     public function test_refresh_token_is_rotated_automatically(): void
     {
         $user = User::factory()->create([

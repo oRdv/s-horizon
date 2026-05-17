@@ -2,12 +2,22 @@ import axios from 'axios'
 
 import { apiClient } from '@/services/api/client'
 import { useSessionStore } from '@/store/useSessionStore'
-import type { AuthResponse, AuthUser, MeResponse } from '@/types/auth'
+import type { AuthResponse, AuthUser, MeResponse, SecurityTokenPreview } from '@/types/auth'
 
 export interface LoginCredentials {
   email: string
   password: string
   two_factor_code?: string
+}
+
+export class TwoFactorRequiredError extends Error {
+  public readonly security?: SecurityTokenPreview
+
+  constructor(message: string, security?: SecurityTokenPreview) {
+    super(message)
+    this.name = 'TwoFactorRequiredError'
+    this.security = security
+  }
 }
 
 export interface RegisterCredentials {
@@ -26,7 +36,18 @@ export const authService = {
   async login(credentials: LoginCredentials): Promise<AuthUser> {
     const response = await apiClient.post<AuthResponse>('/auth/login', credentials)
 
+    if ('requires_two_factor' in response.data && response.data.requires_two_factor) {
+      throw new TwoFactorRequiredError(
+        response.data.message ?? 'Confirme o código enviado para seu e-mail.',
+        response.data.data?.security,
+      )
+    }
+
     useSessionStore.getState().setSession(response.data)
+
+    if (!response.data.data.user) {
+      throw new Error('Resposta de login sem usuário autenticado.')
+    }
 
     return response.data.data.user
   },

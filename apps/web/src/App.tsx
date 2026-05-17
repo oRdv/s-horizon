@@ -136,7 +136,7 @@ function App() {
         />
         <Route
           element={
-            <ProtectedRoute roles={['customer']}>
+            <ProtectedRoute roles={['customer', 'booster']}>
               <PurchasesPage />
             </ProtectedRoute>
           }
