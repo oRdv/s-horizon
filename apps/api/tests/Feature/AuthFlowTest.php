@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Enums\UserRole;
 use App\Models\RefreshToken;
+use App\Models\AccountSecurityToken;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class AuthFlowTest extends TestCase
@@ -98,6 +100,54 @@ class AuthFlowTest extends TestCase
             'two_factor_code' => $challengeResponse->json('data.security.dev_token'),
         ])->assertOk()
             ->assertJsonPath('data.user.email', $user->email);
+    }
+
+    public function test_authenticated_user_can_confirm_password_change_with_email_code(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'change-password@horizonboost.gg',
+            'password' => 'OldHorizon123!',
+            'is_active' => true,
+        ]);
+
+        $token = $this->loginToken($user->email, 'OldHorizon123!');
+
+        $changeResponse = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/profile/change-requests', [
+                'password' => 'NewHorizon123!',
+                'password_confirmation' => 'NewHorizon123!',
+            ]);
+
+        $changeResponse
+            ->assertAccepted()
+            ->assertJsonPath('data.purpose', 'password_change')
+            ->assertJsonPath('data.security.token_sent', true);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/profile/change-requests/confirm', [
+                'purpose' => 'password_change',
+                'token' => $changeResponse->json('data.security.dev_token'),
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.user.email', $user->email);
+
+        $this->assertTrue(Hash::check('NewHorizon123!', $user->refresh()->password));
+        $this->assertFalse(Hash::check('OldHorizon123!', $user->password));
+
+        $this->postJson('/api/auth/login', [
+            'email' => $user->email,
+            'password' => 'OldHorizon123!',
+        ])->assertUnauthorized();
+
+        $this->postJson('/api/auth/login', [
+            'email' => $user->email,
+            'password' => 'NewHorizon123!',
+        ])->assertOk();
+
+        $this->assertDatabaseHas((new AccountSecurityToken())->getTable(), [
+            'email' => $user->email,
+            'purpose' => 'password_change',
+        ]);
     }
 
     public function test_seeded_master_admin_starts_with_two_factor_enabled(): void
