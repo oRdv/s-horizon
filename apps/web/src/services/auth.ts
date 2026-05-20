@@ -1,5 +1,3 @@
-import axios from 'axios'
-
 import { apiClient } from '@/services/api/client'
 import { useSessionStore } from '@/store/useSessionStore'
 import type { AuthResponse, AuthUser, MeResponse, SecurityTokenPreview } from '@/types/auth'
@@ -27,10 +25,12 @@ export interface RegisterCredentials {
   password_confirmation: string
 }
 
-const JSON_HEADERS = {
-  Accept: 'application/json',
-  'Content-Type': 'application/json',
-} as const
+export interface ResetPasswordPayload {
+  email: string
+  token: string
+  password: string
+  password_confirmation: string
+}
 
 export const authService = {
   async login(credentials: LoginCredentials): Promise<AuthUser> {
@@ -60,6 +60,18 @@ export const authService = {
     return response.data
   },
 
+  async requestPasswordReset(email: string): Promise<string> {
+    const response = await apiClient.post<{ message: string }>('/auth/password/forgot', { email })
+
+    return response.data.message
+  },
+
+  async resetPassword(payload: ResetPasswordPayload): Promise<string> {
+    const response = await apiClient.post<{ message: string }>('/auth/password/reset', payload)
+
+    return response.data.message
+  },
+
   async fetchMe(): Promise<AuthUser> {
     const response = await apiClient.get<MeResponse>('/me')
 
@@ -73,15 +85,9 @@ export const authService = {
 
     try {
       if (refreshToken) {
-        await axios.post(
-          '/api/auth/logout',
-          {
-            refresh_token: refreshToken,
-          },
-          {
-            headers: JSON_HEADERS,
-          },
-        )
+        await apiClient.post('/auth/logout', {
+          refresh_token: refreshToken,
+        })
       }
     } finally {
       clearSession()

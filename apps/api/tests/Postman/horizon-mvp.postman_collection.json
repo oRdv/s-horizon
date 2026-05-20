@@ -1,0 +1,141 @@
+{
+  "info": {
+    "name": "Horizon Boost MVP Critical API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://127.0.0.1:8000/api" },
+    { "key": "access_token", "value": "" },
+    { "key": "refresh_token", "value": "" },
+    { "key": "verification_token", "value": "" },
+    { "key": "reset_token", "value": "" },
+    { "key": "order_id", "value": "" },
+    { "key": "payment_id", "value": "" },
+    { "key": "conversation_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": { "method": "GET", "url": "{{base_url}}/health" },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('healthy or diagnostic response', () => pm.expect([200,503]).to.include(pm.response.code));"] } }]
+    },
+    {
+      "name": "Register customer",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/auth/register",
+        "body": { "mode": "raw", "raw": "{\"name\":\"Postman Cliente\",\"email\":\"postman.customer@example.com\",\"password\":\"Horizon123!\",\"password_confirmation\":\"Horizon123!\"}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('created', () => pm.response.to.have.status(201));", "const json = pm.response.json();", "pm.collectionVariables.set('access_token', json.access_token);", "pm.collectionVariables.set('refresh_token', json.refresh_token);", "if (json.data?.email_verification?.dev_token) pm.collectionVariables.set('verification_token', json.data.email_verification.dev_token);"] } }]
+    },
+    {
+      "name": "Confirm email verification",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{access_token}}" }
+        ],
+        "url": "{{base_url}}/security/email-verification/confirm",
+        "body": { "mode": "raw", "raw": "{\"token\":\"{{verification_token}}\"}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('email verified', () => pm.response.to.have.status(200));"] } }]
+    },
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/auth/login",
+        "body": { "mode": "raw", "raw": "{\"email\":\"postman.customer@example.com\",\"password\":\"Horizon123!\"}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('login ok', () => pm.response.to.have.status(200));", "const json = pm.response.json();", "pm.collectionVariables.set('access_token', json.access_token);", "pm.collectionVariables.set('refresh_token', json.refresh_token);"] } }]
+    },
+    {
+      "name": "Forgot password",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/auth/password/forgot",
+        "body": { "mode": "raw", "raw": "{\"email\":\"postman.customer@example.com\"}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('reset requested', () => pm.response.to.have.status(200));", "const json = pm.response.json();", "if (json.data?.security?.dev_token) pm.collectionVariables.set('reset_token', json.data.security.dev_token);"] } }]
+    },
+    {
+      "name": "Create customer order",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{access_token}}" }
+        ],
+        "url": "{{base_url}}/payments/customer",
+        "body": { "mode": "raw", "raw": "{\"service_type\":\"solo_boost\",\"title\":\"Pedido Postman\",\"description\":\"Pedido de teste\",\"amount\":9900,\"metadata\":{\"source\":\"postman\"}}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('order created', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('order_id', pm.response.json().data.order.id);"] } }]
+    },
+    {
+      "name": "List payment methods",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+        "url": "{{base_url}}/payments/methods/{{order_id}}"
+      },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('methods listed', () => pm.response.to.have.status(200));"] } }]
+    },
+    {
+      "name": "Create PIX payment",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{access_token}}" }
+        ],
+        "url": "{{base_url}}/payments/create",
+        "body": { "mode": "raw", "raw": "{\"boostId\":{{order_id}},\"orderId\":{{order_id}},\"method\":\"PIX\"}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('payment created or provider diagnostic', () => pm.expect([201,503]).to.include(pm.response.code));", "if (pm.response.code === 201) pm.collectionVariables.set('payment_id', pm.response.json().data.payment.id);"] } }]
+    },
+    {
+      "name": "Payment status",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+        "url": "{{base_url}}/payments/{{payment_id}}/status"
+      },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('status checked', () => pm.expect([200,404]).to.include(pm.response.code));"] } }]
+    },
+    {
+      "name": "Protected admin must reject customer",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+        "url": "{{base_url}}/admin/users"
+      },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('forbidden for customer', () => pm.response.to.have.status(403));"] } }]
+    },
+    {
+      "name": "List orders",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+        "url": "{{base_url}}/orders"
+      },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('orders listed', () => pm.response.to.have.status(200));"] } }]
+    },
+    {
+      "name": "Logout",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{access_token}}" }
+        ],
+        "url": "{{base_url}}/auth/logout",
+        "body": { "mode": "raw", "raw": "{\"refresh_token\":\"{{refresh_token}}\"}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('logout ok', () => pm.response.to.have.status(200));"] } }]
+    }
+  ]
+}

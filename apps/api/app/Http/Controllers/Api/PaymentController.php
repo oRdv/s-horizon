@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\PaymentMethod;
-use App\Enums\PaymentProvider;
 use App\Enums\PaymentStatus;
 use App\Enums\ServiceOrderStatus;
 use App\Enums\UserRole;
@@ -106,7 +105,7 @@ class PaymentController extends Controller
 
             $message = 'Não foi possível criar o pagamento real no provedor.';
             if (config('app.debug')) {
-                $message .= ' ' . $exception->getMessage();
+                $message .= ' '.$exception->getMessage();
             }
 
             return $this->error($message, 502);
@@ -317,7 +316,11 @@ class PaymentController extends Controller
     {
         $secret = config('services.mercado_pago.webhook_secret');
         if (! is_string($secret) || trim($secret) === '') {
-            return true;
+            Log::warning('payments.mercado_pago_webhook_secret_missing', [
+                'environment' => app()->environment(),
+            ]);
+
+            return ! app()->environment('production');
         }
 
         $signature = (string) $request->header('x-signature');

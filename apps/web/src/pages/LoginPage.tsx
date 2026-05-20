@@ -158,6 +158,9 @@ export function LoginPage() {
             <p className="signup-link">
               Não tem uma conta? <Link to="/signup">Criar conta</Link>
             </p>
+            <p className="signup-link">
+              Esqueceu a senha? <Link to="/forgot-password">Recuperar acesso</Link>
+            </p>
           </div>
         </main>
       </div>

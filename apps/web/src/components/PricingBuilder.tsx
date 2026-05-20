@@ -710,6 +710,7 @@ function PaymentWizardModal(props: {
   const qrCodeImageSrc = normalizePixQrImageSource(qrCodeBase64, qrCodeDataUrl)
   const expiresAt = checkout?.gateway.expiresAt ?? checkout?.transaction.expiresAt ?? null
   const remainingMs = pixCountdownEndsAt ? Math.max(0, pixCountdownEndsAt - currentTime) : null
+  const pollingPaymentId = checkout?.gateway.paymentId ?? checkout?.transaction.id ?? null
 
   useEffect(() => {
     if (!open) return
@@ -733,18 +734,22 @@ function PaymentWizardModal(props: {
 
   useEffect(() => {
     if (!open) {
-      setStep('summary')
-      setOrder(null)
-      setMethods(null)
-      setSelectedMethod(null)
-      setInstallments(1)
-      setCheckout(null)
-      setPixCountdownEndsAt(null)
-      setQrCodeDataUrl(null)
-      setStatus(null)
-      setError(null)
-      setPollingError(null)
-      createPaymentInFlightRef.current = false
+      const timeoutId = window.setTimeout(() => {
+        setStep('summary')
+        setOrder(null)
+        setMethods(null)
+        setSelectedMethod(null)
+        setInstallments(1)
+        setCheckout(null)
+        setPixCountdownEndsAt(null)
+        setQrCodeDataUrl(null)
+        setStatus(null)
+        setError(null)
+        setPollingError(null)
+        createPaymentInFlightRef.current = false
+      }, 0)
+
+      return () => window.clearTimeout(timeoutId)
     }
   }, [open])
 
@@ -774,15 +779,14 @@ function PaymentWizardModal(props: {
   }, [step])
 
   useEffect(() => {
-    if (!checkout || (step !== 'pixQr' && step !== 'status')) return
+    if (!pollingPaymentId || (step !== 'pixQr' && step !== 'status')) return
 
     let active = true
-    const paymentId = checkout.gateway.paymentId ?? checkout.transaction.id
-    const numericPaymentId = Number(paymentId)
+    const numericPaymentId = Number(pollingPaymentId)
 
     if (!Number.isFinite(numericPaymentId) || numericPaymentId <= 0) {
       if (import.meta.env.DEV) {
-        console.warn('[payments] polling skipped: invalid paymentId', paymentId)
+        console.warn('[payments] polling skipped: invalid paymentId', pollingPaymentId)
       }
 
       return
@@ -849,7 +853,7 @@ function PaymentWizardModal(props: {
       active = false
       window.clearInterval(interval)
     }
-  }, [checkout?.gateway.paymentId, checkout?.transaction.id, step])
+  }, [pollingPaymentId, step])
 
   if (!open) return null
 

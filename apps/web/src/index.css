@@ -441,6 +441,20 @@ p {
   margin-top: 0.5rem;
 }
 
+.form-success {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.9rem 1rem;
+  border-radius: 10px;
+  background: rgba(24, 164, 105, 0.16);
+  color: #b9f3d8;
+  font-size: 0.95rem;
+  text-align: center;
+  margin-top: 0.5rem;
+}
+
 .login-layout {
   position: relative;
   z-index: 1;
@@ -9234,5 +9248,797 @@ p {
 
   .booster-queue-card.client-order-card .client-order-card__meta {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Responsive hardening */
+html {
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+img,
+video,
+canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+textarea,
+input,
+select,
+button {
+  max-width: 100%;
+}
+
+:where(main, section, article, aside, header, nav, form, div) {
+  min-width: 0;
+}
+
+.dashboard-shell__menu-button {
+  display: none;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text);
+}
+
+.dashboard-shell__menu-button:hover {
+  background: rgba(156, 17, 17, 0.16);
+}
+
+.dashboard-shell__nav-link,
+.primary-button,
+.ghost-button,
+.cta-button,
+.service-cta,
+.login-submit,
+.landing-login-btn,
+.landing-signup-btn {
+  min-height: 44px;
+  touch-action: manipulation;
+}
+
+.client-order-card__meta strong,
+.client-payment-card strong,
+.finance-transaction-card strong,
+.finance-withdrawal-card strong,
+.stack-list__item strong,
+.tracker-live-card strong,
+.data-table__row > *,
+.pricing-summary-card__details strong,
+.payment-wizard__details strong,
+.payment-checkout-modal__meta strong,
+.payment-review-modal__summary strong {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1024px) {
+  .landing-main,
+  .dashboard-shell__content {
+    width: 100%;
+  }
+
+  .master-dashboard-layout,
+  .master-dashboard-hero,
+  .master-metric-grid,
+  .finance-hero,
+  .finance-layout,
+  .finance-primary-layout,
+  .system-grid-two,
+  .purchases-hero,
+  .pricing-builder__shell,
+  .booster-orders-layout,
+  .booster-order-detail-layout,
+  .email-verification-main {
+    grid-template-columns: 1fr;
+  }
+
+  .pricing-summary-card {
+    position: static;
+  }
+
+  .payment-wizard,
+  .payment-checkout-modal,
+  .payment-review-modal,
+  .champion-picker-modal,
+  .order-detail-modal,
+  .order-chat-modal,
+  .confirm-modal {
+    max-width: calc(100vw - 2rem);
+  }
+}
+
+@media (max-width: 900px) {
+  .dashboard-shell {
+    padding: max(0.8rem, env(safe-area-inset-top)) 0.8rem 0.8rem;
+  }
+
+  .dashboard-shell__header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.75rem;
+    top: 0.65rem;
+    border-radius: 22px;
+  }
+
+  .dashboard-shell__menu-button {
+    display: grid;
+  }
+
+  .dashboard-shell__nav {
+    grid-column: 1 / -1;
+    display: none;
+    width: 100%;
+    grid-template-columns: 1fr;
+    gap: 0.45rem;
+    padding: 0.55rem;
+    border-radius: 20px;
+    overflow: visible;
+  }
+
+  .dashboard-shell__nav.is-open {
+    display: grid;
+  }
+
+  .dashboard-shell__nav-link {
+    width: 100%;
+    justify-content: flex-start;
+    padding-inline: 0.95rem;
+    border-radius: 16px;
+  }
+
+  .dashboard-shell__account {
+    grid-column: 1 / -1;
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    border-radius: 20px;
+  }
+
+  .dashboard-shell__account-copy {
+    max-width: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .landing-page,
+  .login-page,
+  .dashboard-shell {
+    min-height: 100dvh;
+  }
+
+  .landing-header,
+  .landing-main,
+  .landing-footer,
+  .login-container,
+  .dashboard-shell__content {
+    padding-inline: 1rem;
+  }
+
+  .landing-header {
+    align-items: stretch;
+  }
+
+  .landing-header__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .discord-button--header {
+    grid-column: 1 / -1;
+  }
+
+  .landing-header__actions a,
+  .landing-login-btn,
+  .landing-signup-btn {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .hero-section,
+  .services-section,
+  .company-section,
+  .booster-recruit-section {
+    padding-block: 1.25rem;
+  }
+
+  .hero-title,
+  .section-title,
+  .section-heading h2,
+  .purchases-hero__copy h1,
+  .system-hero h1,
+  .master-dashboard-hero__copy h1,
+  .finance-hero h1,
+  .booster-orders-hero h1 {
+    font-size: clamp(2rem, 11vw, 3rem);
+    line-height: 1;
+    letter-spacing: -0.045em;
+  }
+
+  .hero-subtitle,
+  .section-subtitle,
+  .section-heading p,
+  .purchases-hero__copy p,
+  .system-hero p {
+    font-size: 1rem;
+    line-height: 1.55;
+  }
+
+  .services-grid,
+  .steps-grid,
+  .footer-links,
+  .system-card-grid,
+  .master-metric-grid,
+  .finance-metric-grid,
+  .orders-grid,
+  .booster-queue-grid,
+  .tracker-live-grid,
+  .recommended-grid,
+  .pricing-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .service-card--sales p {
+    min-height: 0;
+  }
+
+  .footer-content {
+    gap: 1.4rem;
+  }
+
+  .login-main {
+    align-items: start;
+    padding-block: 0.75rem 1.5rem;
+  }
+
+  .login-content {
+    border-radius: 24px;
+  }
+
+  .login-intro {
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1.1rem;
+    text-align: center;
+  }
+
+  .login-logo {
+    width: 4.6rem;
+    height: 4.6rem;
+  }
+
+  .login-logo__image {
+    width: 4.6rem;
+    height: 4.6rem;
+  }
+
+  .login-intro h1 {
+    max-width: 100%;
+    font-size: clamp(2rem, 11vw, 3rem);
+    line-height: 1;
+    letter-spacing: -0.04em;
+  }
+
+  .login-intro p {
+    font-size: 0.98rem;
+    line-height: 1.5;
+  }
+
+  .login-form {
+    gap: 0.85rem;
+  }
+
+  .form-group {
+    height: auto;
+    min-height: 3.25rem;
+    margin-bottom: 0;
+  }
+
+  .form-group input,
+  .simple-input,
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .auth-benefits {
+    grid-template-columns: 1fr;
+  }
+
+  .system-hero,
+  .form-panel-title,
+  .client-dashboard-panel__header,
+  .booster-queue-panel__header,
+  .finance-panel-heading,
+  .master-panel-heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+
+  .system-hero__actions,
+  .row-actions,
+  .inline-form,
+  .landing-booster-form__actions,
+  .booster-queue-panel__actions,
+  .client-order-card__actions,
+  .finance-withdrawal-modal__actions,
+  .payment-wizard__actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .system-hero__actions > *,
+  .row-actions > *,
+  .inline-form > *,
+  .landing-booster-form__actions > *,
+  .booster-queue-panel__actions > *,
+  .client-order-card__actions > *,
+  .finance-withdrawal-modal__actions > *,
+  .payment-wizard__actions > * {
+    width: 100%;
+  }
+
+  .form-grid,
+  .booster-fields-grid,
+  .agreement-grid,
+  .role-picker,
+  .staff-profile-picker > div,
+  .pricing-family-grid,
+  .pricing-game-rail,
+  .pricing-stage-grid,
+  .pricing-stage-card__body--split,
+  .pricing-addon-grid,
+  .pricing-addon-panels,
+  .payment-wizard__summary-grid,
+  .payment-wizard__method-grid,
+  .payment-wizard__installments,
+  .payment-wizard__pix-layout,
+  .payment-wizard__receipt,
+  .payment-checkout-modal__summary,
+  .payment-checkout-modal__pix-layout,
+  .payment-checkout-modal__meta,
+  .payment-review-modal__summary,
+  .finance-withdrawal-summary,
+  .finance-withdrawable-grid,
+  .finance-history-panel .finance-transaction-list,
+  .finance-primary-layout--single .finance-withdrawal-list {
+    grid-template-columns: 1fr;
+  }
+
+  .tracker-live-card,
+  .finance-transaction-card,
+  .finance-withdrawal-card,
+  .finance-withdrawable-card,
+  .client-payment-card,
+  .client-dashboard-order,
+  .booster-priority-card {
+    grid-template-columns: 1fr;
+  }
+
+  .tracker-live-card__icon,
+  .finance-transaction-card__icon {
+    display: none;
+  }
+
+  .tracker-live-progress,
+  .finance-transaction-card__amount,
+  .finance-withdrawable-card__action,
+  .client-payment-card__amount {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .master-goal-item > div:first-child,
+  .master-withdrawal-item,
+  .master-role-item,
+  .finance-withdrawable-boosts__header,
+  .booster-priority-queue__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .finance-withdrawal-card__actions,
+  .booster-priority-card .ghost-button,
+  .booster-priority-card .primary-button,
+  .booster-priority-card .chat-open-button {
+    width: 100%;
+  }
+
+  .pricing-builder,
+  .pricing-builder__main,
+  .pricing-summary-card,
+  .pricing-reference-table,
+  .management-panel,
+  .client-dashboard-panel,
+  .booster-queue-panel,
+  .payment-preview-panel,
+  .finance-withdrawal-modal,
+  .payment-result-panel,
+  .email-verification-card,
+  .email-verification-side {
+    border-radius: 22px;
+    padding: 1rem;
+  }
+
+  .pricing-builder__hero-copy h2 {
+    max-width: none;
+    font-size: clamp(2rem, 10vw, 2.8rem);
+    line-height: 1;
+    letter-spacing: -0.045em;
+  }
+
+  .pricing-mode-rail {
+    display: grid;
+    grid-template-columns: 1fr;
+    border-radius: 22px;
+  }
+
+  .pricing-mode-tab,
+  .pricing-family-card,
+  .pricing-game-chip {
+    border-radius: 18px;
+  }
+
+  .pricing-stepper {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+  }
+
+  .pricing-step small {
+    display: none;
+  }
+
+  .pricing-tier-cloud {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pricing-tier-pill {
+    min-width: 0;
+    width: 100%;
+    flex: none;
+  }
+
+  .pricing-reference-table {
+    overflow: hidden;
+  }
+
+  .pricing-reference-table__scroll {
+    margin-inline: -0.25rem;
+    padding-bottom: 0.35rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  .payment-wizard,
+  .payment-checkout-modal,
+  .payment-review-modal,
+  .finance-withdrawal-modal,
+  .champion-picker-modal,
+  .confirm-modal,
+  .order-detail-modal,
+  .order-chat-modal {
+    width: 100%;
+    max-height: calc(100dvh - 1.5rem);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .payment-wizard__qr-frame,
+  .payment-checkout-modal__qr-frame {
+    min-height: 0;
+    padding: 0.75rem;
+  }
+
+  .payment-wizard__qr-frame img,
+  .payment-checkout-modal__qr-frame img {
+    max-width: min(260px, 72vw);
+  }
+
+  .payment-wizard__copy-block textarea,
+  .payment-checkout-modal__copy-block textarea {
+    min-height: 7rem;
+    overflow-wrap: anywhere;
+  }
+
+  .data-table {
+    overflow: visible;
+  }
+
+  .data-table__row--head {
+    display: none;
+  }
+
+  .data-table__row {
+    min-width: 0;
+    grid-template-columns: 1fr;
+    gap: 0.55rem;
+    align-items: stretch;
+    padding: 1rem;
+  }
+
+  .data-table__row > :not(.row-actions) {
+    display: grid;
+    gap: 0.18rem;
+  }
+
+  .data-table__row > :not(.row-actions)::before,
+  .data-table__row > .row-actions::before {
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .data-table__row > :nth-child(1)::before {
+    content: 'Nome';
+  }
+
+  .data-table__row > :nth-child(2)::before {
+    content: 'Email';
+  }
+
+  .data-table__row > :nth-child(3)::before {
+    content: 'Perfil';
+  }
+
+  .data-table__row > :nth-child(4)::before {
+    content: 'Status';
+  }
+
+  .data-table__row > .row-actions::before {
+    content: 'Acoes';
+    grid-column: 1 / -1;
+  }
+
+  .data-table__row > .row-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+  }
+}
+
+@media (max-width: 560px) {
+  .modal-backdrop {
+    align-items: start;
+    overflow-y: auto;
+    padding: max(0.65rem, env(safe-area-inset-top)) 0.65rem max(0.65rem, env(safe-area-inset-bottom));
+  }
+
+  .toast-viewport {
+    inset: max(0.75rem, env(safe-area-inset-top)) 0.75rem auto;
+    width: auto;
+  }
+
+  .toast {
+    grid-template-columns: 1fr auto;
+  }
+
+  .toast > svg {
+    display: none;
+  }
+
+  .landing-header,
+  .landing-main,
+  .landing-footer,
+  .login-container,
+  .dashboard-shell__content {
+    padding-inline: 0.75rem;
+  }
+
+  .landing-header__actions {
+    grid-template-columns: 1fr;
+  }
+
+  .brand-mark__copy strong {
+    font-size: 1.05rem;
+  }
+
+  .brand-mark__copy span {
+    display: none;
+  }
+
+  .landing-header__brand .brand-mark__icon {
+    width: 4.5rem;
+    height: 4.5rem;
+  }
+
+  .landing-header__brand .brand-mark__image {
+    width: 4.15rem;
+    height: 4.15rem;
+  }
+
+  .landing-header__brand .brand-mark__copy strong {
+    font-size: clamp(1.45rem, 8vw, 1.9rem);
+  }
+
+  .hero-badge,
+  .cta-button,
+  .service-cta,
+  .primary-button,
+  .ghost-button,
+  .login-submit {
+    width: 100%;
+  }
+
+  .hero-title,
+  .section-heading h2,
+  .section-title,
+  .login-intro h1,
+  .purchases-hero__copy h1,
+  .system-hero h1,
+  .master-dashboard-hero__copy h1,
+  .finance-hero h1,
+  .booster-orders-hero h1,
+  .email-verification-card h1 {
+    font-size: clamp(1.85rem, 10vw, 2.55rem);
+  }
+
+  .panel__eyebrow {
+    letter-spacing: 0.08em;
+  }
+
+  .pricing-stepper,
+  .pricing-tier-cloud,
+  .auth-benefits {
+    grid-template-columns: 1fr;
+  }
+
+  .pricing-inline-pills,
+  .pricing-division-pills {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .pricing-inline-chip,
+  .pricing-division-pill {
+    width: 100%;
+  }
+
+  .pricing-summary-card__price strong {
+    font-size: clamp(2rem, 14vw, 2.9rem);
+  }
+
+  .payment-wizard__progress-item,
+  .payment-wizard__details,
+  .payment-wizard__status-pill {
+    width: 100%;
+  }
+
+  .payment-wizard__details {
+    align-items: stretch;
+  }
+
+  .chat-modal-backdrop {
+    padding: 0;
+    align-items: stretch;
+    justify-content: stretch;
+  }
+
+  .chat-modal {
+    width: 100vw;
+    height: 100dvh;
+    min-height: 0;
+    border-radius: 0;
+    border-inline: 0;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    padding:
+      max(0.85rem, env(safe-area-inset-top))
+      0.75rem
+      max(0.85rem, env(safe-area-inset-bottom));
+  }
+
+  .chat-header {
+    padding-right: 2.7rem;
+  }
+
+  .chat-header__badges,
+  .chat-header__status {
+    display: none;
+  }
+
+  .chat-pinned-message {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .chat-pinned-message > svg {
+    display: none;
+  }
+
+  .chat-pinned-message p {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .chat-message-list {
+    padding: 0.75rem;
+    border-radius: 16px;
+  }
+
+  .chat-message {
+    width: 100%;
+  }
+
+  .chat-message__body p {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .chat-message__avatar {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .chat-input {
+    position: sticky;
+    bottom: 0;
+    grid-template-columns: minmax(0, 1fr) 3.1rem;
+    padding-top: 0.45rem;
+    background: linear-gradient(180deg, transparent, rgba(12, 7, 8, 0.94) 28%);
+  }
+
+  .chat-input textarea {
+    height: 3.1rem;
+    min-height: 3.1rem;
+    font-size: 16px;
+  }
+
+  .chat-input__send {
+    width: 3.1rem;
+    height: 3.1rem;
+  }
+}
+
+@media (max-width: 375px) {
+  .dashboard-shell {
+    padding-inline: 0.55rem;
+  }
+
+  .dashboard-shell__header,
+  .login-content,
+  .pricing-builder,
+  .pricing-builder__main,
+  .pricing-summary-card,
+  .management-panel,
+  .system-hero,
+  .client-order-card,
+  .payment-result-panel {
+    padding: 0.85rem;
+    border-radius: 18px;
+  }
+
+  .hero-title,
+  .section-heading h2,
+  .section-title,
+  .login-intro h1,
+  .email-verification-card h1 {
+    font-size: clamp(1.72rem, 10vw, 2.25rem);
+  }
+
+  .service-card,
+  .step-card,
+  .summary-card,
+  .master-metric-card,
+  .finance-metric-card {
+    padding: 0.9rem;
+    border-radius: 18px;
+  }
+
+  .payment-wizard__qr-frame img,
+  .payment-checkout-modal__qr-frame img {
+    max-width: min(230px, 76vw);
   }
 }

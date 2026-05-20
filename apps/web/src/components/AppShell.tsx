@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
-import { LogOut } from 'lucide-react'
+import { useState } from 'react'
+import { LogOut, Menu, X } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
 import { BrandMark } from '@/components/BrandMark'
@@ -14,6 +15,7 @@ interface AppShellProps {
 
 export function AppShell({ userName, onLogout, children }: AppShellProps) {
   const user = useSessionStore((state) => state.user)
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const initials = userName
     .split(' ')
     .filter(Boolean)
@@ -33,7 +35,27 @@ export function AppShell({ userName, onLogout, children }: AppShellProps) {
       <header className="dashboard-shell__header">
         <BrandMark compact />
 
-        <nav className="dashboard-shell__nav" aria-label="Navegação do painel">
+        <button
+          aria-controls="dashboard-mobile-navigation"
+          aria-expanded={isMobileNavOpen}
+          aria-label={isMobileNavOpen ? 'Fechar menu' : 'Abrir menu'}
+          className="dashboard-shell__menu-button"
+          onClick={() => setIsMobileNavOpen((current) => !current)}
+          type="button"
+        >
+          {isMobileNavOpen ? <X size={19} /> : <Menu size={19} />}
+        </button>
+
+        <nav
+          className={`dashboard-shell__nav${isMobileNavOpen ? ' is-open' : ''}`}
+          id="dashboard-mobile-navigation"
+          aria-label="Navegação do painel"
+          onClick={(event) => {
+            if (event.target instanceof HTMLElement && event.target.closest('a')) {
+              setIsMobileNavOpen(false)
+            }
+          }}
+        >
           <NavLink to="/dashboard" className={({ isActive }) => `dashboard-shell__nav-link${isActive ? ' is-active' : ''}`}>
             Dashboard
           </NavLink>

@@ -39,40 +39,54 @@ export function EmailVerificationPage() {
     const lastSentAt = Number(window.sessionStorage.getItem(storageKey) ?? 0)
     const recentlySent = Date.now() - lastSentAt < 90_000
 
-    if (verificationCodeAlreadySent || recentlySent) {
-      setSendStatus('Código enviado para seu e-mail.')
-      return
+    let active = true
+    const timeoutId = window.setTimeout(() => {
+      if (!active) return
+
+      if (verificationCodeAlreadySent || recentlySent) {
+        setSendStatus('Código enviado para seu e-mail.')
+        return
+      }
+
+      autoSendStartedRef.current = true
+      setIsAutoSending(true)
+      setError(null)
+      setSendStatus('Enviando código para seu e-mail...')
+
+      systemService
+        .requestEmailVerification()
+        .then(() => {
+          if (!active) return
+
+          window.sessionStorage.setItem(storageKey, String(Date.now()))
+          setSendStatus('Código enviado automaticamente para seu e-mail.')
+          addToast({
+            tone: 'success',
+            title: 'Código enviado',
+            description: 'Enviamos o código de verificação para seu e-mail.',
+          })
+        })
+        .catch((error: unknown) => {
+          if (!active) return
+
+          const message = getApiErrorMessage(error, 'Não foi possível enviar o código automaticamente.')
+          setError(message)
+          setSendStatus(null)
+          addToast({
+            tone: 'error',
+            title: 'Falha ao enviar código',
+            description: message,
+          })
+        })
+        .finally(() => {
+          if (active) setIsAutoSending(false)
+        })
+    }, 0)
+
+    return () => {
+      active = false
+      window.clearTimeout(timeoutId)
     }
-
-    autoSendStartedRef.current = true
-    setIsAutoSending(true)
-    setError(null)
-    setSendStatus('Enviando código para seu e-mail...')
-
-    systemService
-      .requestEmailVerification()
-      .then(() => {
-        window.sessionStorage.setItem(storageKey, String(Date.now()))
-        setSendStatus('Código enviado automaticamente para seu e-mail.')
-        addToast({
-          tone: 'success',
-          title: 'Código enviado',
-          description: 'Enviamos o código de verificação para seu e-mail.',
-        })
-      })
-      .catch((error: unknown) => {
-        const message = getApiErrorMessage(error, 'Não foi possível enviar o código automaticamente.')
-        setError(message)
-        setSendStatus(null)
-        addToast({
-          tone: 'error',
-          title: 'Falha ao enviar código',
-          description: message,
-        })
-      })
-      .finally(() => {
-        setIsAutoSending(false)
-      })
   }, [addToast, user, verificationCodeAlreadySent])
 
   if (user?.email_verified_at) {

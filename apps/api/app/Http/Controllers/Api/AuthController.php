@@ -9,7 +9,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RefreshTokenRequest;
 use App\Http\Requests\Auth\RegisterRequest;
+use App\Models\RefreshToken;
 use App\Models\User;
+use App\Services\Audit\AccountAuditService;
 use App\Services\Auth\JwtService;
 use App\Services\Auth\TokenPairService;
 use App\Services\Security\AccountSecurityTokenService;
@@ -20,6 +22,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
@@ -151,6 +154,88 @@ class AuthController extends Controller
         ]);
 
         return $this->tokenResponse($user, $tokenPair);
+    }
+
+    public function forgotPassword(Request $request, AccountSecurityTokenService $securityTokens): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => ['required', 'email'],
+        ]);
+
+        $email = trim((string) $validated['email']);
+        $user = User::query()->where('email', $email)->first();
+        $issuedReset = null;
+
+        if ($user && $user->is_active) {
+            try {
+                $issuedReset = $securityTokens->issue(
+                    user: $user,
+                    email: $user->email,
+                    purpose: SecurityTokenPurpose::PasswordReset,
+                    request: $request,
+                    ttlMinutes: 30,
+                );
+            } catch (TransportExceptionInterface) {
+                return response()->json([
+                    'message' => 'Não conseguimos enviar o e-mail agora. Verifique a configuração SMTP da Horizon Boost.',
+                ], 503);
+            }
+        }
+
+        $data = [];
+        if ($issuedReset && ! app()->isProduction()) {
+            $data['security'] = $securityTokens->exposeForLocalDevelopment($issuedReset);
+        }
+
+        return response()->json([
+            'message' => 'Se o e-mail estiver cadastrado, enviaremos um código para redefinir a senha.',
+            'data' => $data,
+        ]);
+    }
+
+    public function resetPassword(
+        Request $request,
+        AccountSecurityTokenService $securityTokens,
+        AccountAuditService $audit,
+    ): JsonResponse {
+        $validated = $request->validate([
+            'email' => ['required', 'email'],
+            'token' => ['required', 'digits:6'],
+            'password' => ['required', 'confirmed', Password::min(8)],
+        ]);
+
+        $email = trim((string) $validated['email']);
+
+        /** @var User|null $user */
+        $user = User::query()->where('email', $email)->first();
+
+        if (! $user || ! $user->is_active) {
+            throw ValidationException::withMessages([
+                'email' => ['Não foi possível redefinir a senha com os dados informados.'],
+            ]);
+        }
+
+        $securityTokens->consume($user->email, SecurityTokenPurpose::PasswordReset, (string) $validated['token']);
+
+        $user->forceFill([
+            'password' => Hash::make((string) $validated['password']),
+        ])->save();
+
+        $revokedAt = CarbonImmutable::now();
+        RefreshToken::query()
+            ->where('user_id', $user->getKey())
+            ->whereNull('revoked_at')
+            ->update([
+                'revoked_at' => $revokedAt,
+                'last_used_at' => $revokedAt,
+                'updated_at' => $revokedAt,
+            ]);
+
+        $audit->record('auth.password_reset_confirmed', $user, $user, $request, $user);
+
+        return response()->json([
+            'message' => 'Senha redefinida com sucesso. Entre novamente com a nova senha.',
+        ]);
     }
 
     public function refresh(

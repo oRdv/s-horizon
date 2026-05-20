@@ -11,10 +11,12 @@ import { LoginPage } from '@/pages/LoginPage'
 import { SignupPage } from '@/pages/SignupPage'
 import { EmailVerificationPage } from '@/pages/EmailVerificationPage'
 import { FinancePage } from '@/pages/FinancePage'
+import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage'
 import { OrdersPage } from '@/pages/OrdersPage'
 import { ProfilePage } from '@/pages/ProfilePage'
 import { PurchasesPage } from '@/pages/PurchasesPage'
 import { PaymentResultPage } from '@/pages/PaymentResultPage'
+import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
 import { SystemDashboardPage } from '@/pages/SystemDashboardPage'
 import { authService } from '@/services/auth'
 import { useSessionStore } from '@/store/useSessionStore'
@@ -83,6 +85,8 @@ function App() {
         <Route element={<LandingPage />} path="/" />
         <Route element={user ? <Navigate replace to={getHomePath()} /> : <LoginPage />} path="/login" />
         <Route element={user ? <Navigate replace to={getHomePath()} /> : <SignupPage />} path="/signup" />
+        <Route element={user ? <Navigate replace to={getHomePath()} /> : <ForgotPasswordPage />} path="/forgot-password" />
+        <Route element={user ? <Navigate replace to={getHomePath()} /> : <ResetPasswordPage />} path="/reset-password" />
         <Route
           element={
             <ProtectedRoute requireVerifiedEmail={false}>
@@ -129,6 +133,14 @@ function App() {
             </ProtectedRoute>
           }
           path="/profile"
+        />
+        <Route
+          element={
+            <ProtectedRoute>
+              <ProfilePage />
+            </ProtectedRoute>
+          }
+          path="/perfil"
         />
         <Route
           element={<BoosterApplicationPage />}
@@ -190,6 +202,7 @@ function App() {
           }
           path="/payment/processing"
         />
+        <Route element={<Navigate replace to={getHomePath()} />} path="*" />
       </Routes>
       <ToastViewport />
     </>
