@@ -1,0 +1,41 @@
+# Ignore build artifacts and releases
+apps/desktop/release/
+apps/desktop/release/**
+apps/web/dist*
+apps/web/public/downloads/
+apps/web/dist.zip
+apps/web/dist-horizonboost.zip
+dist/
+build/
+release/
+dist-electron/
+release/**
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Archives
+*.zip
+*.tar.gz
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+
+# Logs
+logs/
+*.log
+
+# Temporary
+*.tmp
+tmp/
+
+# Ignore compiled Electron resources
+**/win-unpacked/
+**/resources/**
