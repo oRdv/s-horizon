@@ -23,3 +23,12 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Electron
+apps/desktop/release/
+apps/desktop/dist/
+
+# Builds
+dist/
+*.zip
+*.exe
