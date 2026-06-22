@@ -39,3 +39,8 @@ tmp/
 # Ignore compiled Electron resources
 **/win-unpacked/
 **/resources/**
+
+# Ignore environment files and backups
+.env
+.env.*
+apps/api/.env*
