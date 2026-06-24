@@ -32,6 +32,8 @@ const serviceLabels: Record<string, string> = {
   wins_by_rank: 'Vitórias por elo',
 }
 
+const TRACKER_REFRESH_MS = 15_000
+
 function formatCurrencyCents(value?: number | string | null) {
   const numeric = Number(value ?? 0)
 
@@ -171,12 +173,17 @@ export function OrdersPage() {
   useEffect(() => {
     let active = true
 
-    async function loadOrders() {
+    async function loadOrders(silent = false) {
       try {
         const nextOrders = await systemService.getOrders()
-        if (active) setOrders(nextOrders)
-      } catch (error: unknown) {
         if (active) {
+          setOrders(nextOrders)
+          setSelectedOrder((current) => (
+            current ? nextOrders.find((order) => order.id === current.id) ?? current : current
+          ))
+        }
+      } catch (error: unknown) {
+        if (active && !silent) {
           addToast({
             tone: 'error',
             title: 'Pedidos indisponíveis',
@@ -189,9 +196,13 @@ export function OrdersPage() {
     }
 
     void loadOrders()
+    const intervalId = window.setInterval(() => {
+      void loadOrders(true)
+    }, TRACKER_REFRESH_MS)
 
     return () => {
       active = false
+      window.clearInterval(intervalId)
     }
   }, [addToast])
 

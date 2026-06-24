@@ -1,0 +1,93 @@
+name: Desktop Tracker Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish, for example v1.0.1. Defaults to v<package.json version>."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Build and publish Windows installer
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: apps/desktop
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Resolve release metadata
+        id: release
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            RELEASE_TAG="${GITHUB_REF_NAME}"
+          elif [ -n "${INPUT_TAG}" ]; then
+            RELEASE_TAG="${INPUT_TAG}"
+          else
+            RELEASE_TAG="v${PACKAGE_VERSION}"
+          fi
+
+          if [ "${RELEASE_TAG}" != "v${PACKAGE_VERSION}" ]; then
+            echo "Release tag ${RELEASE_TAG} does not match apps/desktop/package.json version ${PACKAGE_VERSION}"
+            exit 1
+          fi
+
+          echo "package_version=${PACKAGE_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "installer=release/Horizon-Boost-Tracker-Setup-${PACKAGE_VERSION}.exe" >> "$GITHUB_OUTPUT"
+          echo "blockmap=release/Horizon-Boost-Tracker-Setup-${PACKAGE_VERSION}.exe.blockmap" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build Windows release assets
+        run: npm run dist:win
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+
+      - name: Verify required release assets
+        run: npm run verify:release-assets
+
+      - name: Publish assets to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+          PACKAGE_VERSION: ${{ steps.release.outputs.package_version }}
+          INSTALLER: ${{ steps.release.outputs.installer }}
+          BLOCKMAP: ${{ steps.release.outputs.blockmap }}
+        run: |
+          ASSETS=("$INSTALLER" "$BLOCKMAP" "release/latest.yml")
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${ASSETS[@]}" --clobber
+          else
+            gh release create "$RELEASE_TAG" "${ASSETS[@]}" \
+              --title "Horizon Boost Tracker ${PACKAGE_VERSION}" \
+              --notes "Windows desktop tracker release ${PACKAGE_VERSION}."
+          fi

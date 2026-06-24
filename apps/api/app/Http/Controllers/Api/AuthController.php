@@ -273,9 +273,12 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
+        /** @var User $user */
+        $user = $request->user();
+
         return response()->json([
             'data' => [
-                'user' => $request->user(),
+                'user' => $user->loadMissing('boosterProfile'),
             ],
         ]);
     }
@@ -284,7 +287,7 @@ class AuthController extends Controller
     {
         return response()->json([
             'data' => [
-                'user' => $user,
+                'user' => $user->loadMissing('boosterProfile'),
             ],
             'access_token' => $tokenPair->accessToken,
             'refresh_token' => $tokenPair->refreshToken,

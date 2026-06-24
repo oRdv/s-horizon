@@ -33,10 +33,20 @@ export class BackendReporter {
         const response = await axios.post(`${apiBaseUrl}/auth/login`, {
             email: payload.email,
             password: payload.password,
+            two_factor_code: payload.twoFactorCode || undefined,
         }, {
             headers: JSON_HEADERS,
             httpsAgent,
         });
+        if (response.data.requires_two_factor) {
+            const devToken = response.data.data?.security?.dev_token;
+            throw new Error(devToken
+                ? `Codigo de 2FA enviado. Ambiente local: use ${devToken}.`
+                : response.data.message ?? 'Informe o codigo de 2FA enviado para seu email.');
+        }
+        if (!response.data.access_token || !response.data.data.user) {
+            throw new Error('Resposta de login incompleta. Tente entrar novamente.');
+        }
         const session = {
             apiBaseUrl,
             accessToken: response.data.access_token,
@@ -92,6 +102,9 @@ export class BackendReporter {
             headers: JSON_HEADERS,
             httpsAgent,
         });
+        if (!response.data.access_token || !response.data.data.user) {
+            throw new Error('Sessao nao renovada pelo backend.');
+        }
         this.session = {
             apiBaseUrl: session.apiBaseUrl,
             accessToken: response.data.access_token,

@@ -19,6 +19,9 @@ const api = {
     ipcRenderer.invoke('horizon-boost:heartbeat', payload) as Promise<MonitorState>,
   matchFinished: (payload: Record<string, unknown>) =>
     ipcRenderer.invoke('horizon-boost:match-finished', payload) as Promise<MonitorState>,
+  checkForUpdates: () => ipcRenderer.invoke('horizon-boost:updates/check') as Promise<MonitorState['updates']>,
+  downloadUpdate: () => ipcRenderer.invoke('horizon-boost:updates/download') as Promise<MonitorState['updates']>,
+  installUpdate: () => ipcRenderer.invoke('horizon-boost:updates/install') as Promise<MonitorState['updates']>,
   onStateChange: (callback: (state: MonitorState) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: MonitorState) => {
       callback(state)

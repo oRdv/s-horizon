@@ -87,6 +87,42 @@ export interface BoosterTrackerStatusResponse {
   matches?: Array<Record<string, unknown>>
 }
 
+export interface TrackerDownloadMetadata {
+  platform: 'windows'
+  label: string
+  filename: string
+  available: boolean
+  url: string
+  provider?: 'github' | 'local' | string
+  version?: string
+  size_bytes?: number | null
+  sha256?: string | null
+  content_type?: string | null
+  published_at?: string | null
+  release_url?: string | null
+  expires_at?: string | null
+  error?: string | null
+}
+
+export interface TrackerRelease {
+  app_name: string
+  version: string
+  heartbeat_interval_seconds: number
+  downloads: {
+    windows: TrackerDownloadMetadata
+  }
+  requirements: {
+    windows: {
+      label: string
+      league_client_required: boolean
+    }
+    mobile: {
+      supported: boolean
+      message: string
+    }
+  }
+}
+
 export type PaymentMethod = 'PIX' | 'CREDIT_CARD' | 'DEBIT_CARD'
 export type PaymentProvider = 'STRIPE' | 'MERCADO_PAGO'
 

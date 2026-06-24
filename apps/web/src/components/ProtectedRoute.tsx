@@ -19,7 +19,9 @@ export function ProtectedRoute({ children, permissions, requireVerifiedEmail = t
   const refreshToken = useSessionStore((state) => state.refreshToken)
 
   if (!user || (!accessToken && !refreshToken)) {
-    return <Navigate replace to="/login" />
+    const redirect = `${location.pathname}${location.search}`
+
+    return <Navigate replace to={`/login?redirect=${encodeURIComponent(redirect)}`} />
   }
 
   if (requireVerifiedEmail && !user.email_verified_at) {
@@ -27,12 +29,28 @@ export function ProtectedRoute({ children, permissions, requireVerifiedEmail = t
   }
 
   if (roles && !hasRole(user, roles)) {
-    return <Navigate replace to="/dashboard" />
+    return <AccessDenied message="Este link e restrito a boosters ativos da plataforma." />
+  }
+
+  if (roles?.includes('booster') && user.role === 'booster' && user.is_active === false) {
+    return <AccessDenied message="Sua conta booster esta inativa. Fale com o suporte antes de aceitar pedidos." />
   }
 
   if (permissions && !canAccessAnyPermission(user, permissions)) {
-    return <Navigate replace to="/dashboard" />
+    return <AccessDenied message="Sua conta nao tem permissao para acessar esta area." />
   }
 
   return children
+}
+
+function AccessDenied({ message }: { message: string }) {
+  return (
+    <div className="loading-screen">
+      <div className="loading-screen__mark">
+        <span className="panel__eyebrow">Acesso restrito</span>
+        <strong>{message}</strong>
+        <a className="ghost-button" href="/dashboard">Abrir dashboard</a>
+      </div>
+    </div>
+  )
 }

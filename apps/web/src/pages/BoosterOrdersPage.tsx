@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Clock3, Eye, Loader2, ShoppingBag, UserRound, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Clock3, Download, Eye, Loader2, ShoppingBag, UserRound, X } from 'lucide-react'
 
 import { AppShell } from '@/components/AppShell'
+import { TrackerDownloadGuide } from '@/components/booster/TrackerDownloadGuide'
 import { ChatModal } from '@/components/chat/ChatModal'
 import { OrderChatButton } from '@/components/chat/OrderChatButton'
+import { getBoosterPayoutAmount } from '@/config/payout'
 import { getApiErrorMessage } from '@/services/api/errors'
 import { authService } from '@/services/auth'
 import { systemService } from '@/services/system'
@@ -32,8 +34,6 @@ const serviceLabels: Record<string, string> = {
   wins_by_rank: 'Vitórias por elo',
 }
 
-const boosterPayoutRate = 0.6
-
 const addonLabels: Record<string, string> = {
   mmr_profile: 'Perfil de MMR',
   chat_offline: 'Chat offline',
@@ -57,10 +57,6 @@ function formatCurrencyCents(value?: number | string | null) {
     style: 'currency',
     currency: 'BRL',
   }).format(numeric > 999 ? numeric / 100 : numeric)
-}
-
-function getBoosterPayout(value?: number | string | null) {
-  return Number(value ?? 0) * boosterPayoutRate
 }
 
 function getOrderAmount(order: ServiceOrder) {
@@ -236,6 +232,7 @@ export function BoosterOrdersPage() {
   const [chatOrder, setChatOrder] = useState<ServiceOrder | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [completingOrderId, setCompletingOrderId] = useState<number | null>(null)
+  const [isTrackerGuideOpen, setIsTrackerGuideOpen] = useState(false)
   const activeOrders = useMemo(
     () => orders.filter((order) => !['COMPLETED', 'CANCELLED', 'FAILED', 'EXPIRED', 'REFUNDED'].includes(order.status)),
     [orders],
@@ -281,6 +278,11 @@ export function BoosterOrdersPage() {
     }
   }, [addToast])
 
+  async function refreshOrders() {
+    const nextOrders = await systemService.getOrders()
+    setOrders(nextOrders)
+  }
+
   async function handleLogout() {
     await authService.logout()
   }
@@ -315,6 +317,16 @@ export function BoosterOrdersPage() {
             <span className="panel__eyebrow">Área do booster</span>
             <h2>Meus serviços</h2>
             <p>Pedidos atribuídos, chat com o cliente e datas reais do serviço.</p>
+            <div className="section-heading__actions">
+              <button
+                className="primary-button primary-button--crimson"
+                onClick={() => setIsTrackerGuideOpen(true)}
+                type="button"
+              >
+                <Download size={16} />
+                Baixar App
+              </button>
+            </div>
           </div>
 
           {isLoading ? (
@@ -411,7 +423,7 @@ export function BoosterOrdersPage() {
                       </div>
                       <div>
                         <span>Seu ganho</span>
-                        <strong>{formatCurrencyCents(getBoosterPayout(amount))}</strong>
+                        <strong>{formatCurrencyCents(getBoosterPayoutAmount(amount))}</strong>
                       </div>
                       <div>
                         <span>Criado em</span>
@@ -480,7 +492,7 @@ export function BoosterOrdersPage() {
             <div className="client-order-card__meta">
               <div><span>Status do pedido</span><strong>{statusLabel(selectedOrder.status)}</strong></div>
               <div><span>Cliente</span><strong>{selectedOrder.customer?.name ?? 'Cliente sem nome'}</strong></div>
-              <div><span>Seu ganho</span><strong>{formatCurrencyCents(getBoosterPayout(getOrderAmount(selectedOrder)))}</strong></div>
+              <div><span>Seu ganho</span><strong>{formatCurrencyCents(getBoosterPayoutAmount(getOrderAmount(selectedOrder)))}</strong></div>
               <div><span>Criado em</span><strong>{formatDate(selectedOrder.created_at)}</strong></div>
             </div>
             {getAddonTags(selectedOrder).length ? (
@@ -495,6 +507,12 @@ export function BoosterOrdersPage() {
       ) : null}
 
       {chatOrder ? <ChatModal order={chatOrder} onClose={() => setChatOrder(null)} /> : null}
+      <TrackerDownloadGuide
+        assignedOrders={activeOrders}
+        isOpen={isTrackerGuideOpen}
+        onClose={() => setIsTrackerGuideOpen(false)}
+        onStatusRefresh={refreshOrders}
+      />
     </AppShell>
   )
 }

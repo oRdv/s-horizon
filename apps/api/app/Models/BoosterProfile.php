@@ -26,6 +26,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'accepts_initial_percentage',
     'opgg_url',
     'discord_username',
+    'discord_user_id',
     'diamond_plus_eta',
     'accepts_cashflow_decay',
 ])]

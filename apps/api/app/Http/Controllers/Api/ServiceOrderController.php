@@ -7,12 +7,13 @@ use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\ServiceOrder;
 use App\Models\User;
+use App\Services\Notifications\OrderNotificationService;
+use App\Services\Orders\ClaimOrderService;
 use App\Services\Orders\OrderChatService;
 use App\Services\Audit\AccountAuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class ServiceOrderController extends Controller
@@ -49,7 +50,12 @@ class ServiceOrderController extends Controller
     {
         /** @var User $user */
         $user = $request->user();
-        $chat->authorize($user, $serviceOrder);
+
+        if (! $this->canViewOrder($user, $serviceOrder)) {
+            return response()->json([
+                'message' => 'Voce nao tem acesso a este pedido.',
+            ], 403);
+        }
 
         return response()->json([
             'data' => [
@@ -69,63 +75,21 @@ class ServiceOrderController extends Controller
         ServiceOrder $serviceOrder,
         AccountAuditService $audit,
         OrderChatService $chat,
+        ClaimOrderService $claimOrders,
+        OrderNotificationService $notifications,
     ): JsonResponse {
         /** @var User $user */
         $user = $request->user();
-
-        if (! $user->hasRole(UserRole::Booster)) {
-            return response()->json([
-                'message' => 'Somente boosters podem pegar servicos da fila.',
-            ], 403);
-        }
-
-        $claimedOrder = DB::transaction(function () use ($serviceOrder, $user): ServiceOrder {
-            /** @var ServiceOrder|null $order */
-            $order = ServiceOrder::query()
-                ->with(['customer:id,name,email,role', 'booster:id,name,email,role'])
-                ->lockForUpdate()
-                ->find($serviceOrder->getKey());
-
-            if (! $order) {
-                abort(404);
-            }
-
-            $favoriteBooster = data_get($order->metadata ?? [], 'addons.favorite_booster');
-
-            if (filled($favoriteBooster)) {
-                throw ValidationException::withMessages([
-                    'order' => 'Esse servico esta reservado para um booster favorito.',
-                ]);
-            }
-
-            if ($order->booster_id) {
-                throw ValidationException::withMessages([
-                    'order' => 'Esse servico ja foi pego por outro booster.',
-                ]);
-            }
-
-            if (! in_array($order->status, [
-                ServiceOrderStatus::Paid->value,
-                ServiceOrderStatus::WaitingBooster->value,
-            ], true)) {
-                throw ValidationException::withMessages([
-                    'order' => 'Esse servico nao esta mais disponivel na fila.',
-                ]);
-            }
-
-            $order->forceFill([
-                'booster_id' => $user->getKey(),
-                'status' => ServiceOrderStatus::BoosterAssigned->value,
-            ])->save();
-
-            return $order->refresh()->loadMissing(['customer:id,name,email,role', 'booster:id,name,email,role']);
-        });
+        $claimedOrder = $claimOrders->claim($serviceOrder, $user);
 
         $chat->ensureConversation($claimedOrder);
 
         $audit->record('orders.claimed_by_booster', $claimedOrder->customer, $user, $request, $claimedOrder, [
             'service_order_id' => $claimedOrder->getKey(),
         ]);
+
+        $notifications->assigned($claimedOrder, ['email']);
+        $notifications->claimed($claimedOrder);
 
         return response()->json([
             'message' => 'Servico pego com sucesso.',
@@ -146,6 +110,7 @@ class ServiceOrderController extends Controller
         ServiceOrder $serviceOrder,
         AccountAuditService $audit,
         OrderChatService $chat,
+        OrderNotificationService $notifications,
     ): JsonResponse {
         /** @var User $user */
         $user = $request->user();
@@ -181,6 +146,8 @@ class ServiceOrderController extends Controller
             'service_order_id' => $serviceOrder->getKey(),
         ]);
 
+        $notifications->completed($serviceOrder->refresh()->loadMissing(['customer', 'booster']));
+
         return response()->json([
             'message' => 'Serviço finalizado com sucesso.',
             'data' => [
@@ -195,7 +162,12 @@ class ServiceOrderController extends Controller
         ]);
     }
 
-    public function storeGameAccount(Request $request, ServiceOrder $serviceOrder, OrderChatService $chat): JsonResponse
+    public function storeGameAccount(
+        Request $request,
+        ServiceOrder $serviceOrder,
+        OrderChatService $chat,
+        OrderNotificationService $notifications,
+    ): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
@@ -226,6 +198,8 @@ class ServiceOrderController extends Controller
         ];
 
         $serviceOrder->forceFill(['metadata' => $metadata])->save();
+
+        $notifications->gameAccountUpdated($serviceOrder->refresh()->loadMissing(['customer', 'booster']));
 
         return response()->json([
             'message' => 'Dados da conta salvos com segurança.',
@@ -296,5 +270,30 @@ class ServiceOrderController extends Controller
                 ],
             ] : null,
         ];
+    }
+
+    private function canViewOrder(User $user, ServiceOrder $order): bool
+    {
+        if (
+            (int) $order->customer_id === (int) $user->getKey()
+            || (int) $order->booster_id === (int) $user->getKey()
+            || $user->hasRole(UserRole::MasterAdmin)
+            || $user->hasRole(UserRole::Staff)
+        ) {
+            return true;
+        }
+
+        if (! $user->hasRole(UserRole::Booster) || ! $user->is_active || filled($order->booster_id)) {
+            return false;
+        }
+
+        if (filled(data_get($order->metadata ?? [], 'addons.favorite_booster'))) {
+            return false;
+        }
+
+        return in_array($order->status, [
+            ServiceOrderStatus::Paid->value,
+            ServiceOrderStatus::WaitingBooster->value,
+        ], true);
     }
 }

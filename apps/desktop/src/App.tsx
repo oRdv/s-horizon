@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   Activity,
+  CloudDownload,
   ClipboardList,
   Gauge,
   LogOut,
+  PackageCheck,
   Play,
   RefreshCw,
   ShieldCheck,
@@ -14,7 +16,7 @@ import {
   WifiOff,
 } from 'lucide-react'
 
-import type { DesktopOrder, LcuSnapshot, LoginPayload, MonitorState, TrackerStatus } from '../shared/types'
+import type { DesktopOrder, LcuSnapshot, LoginPayload, MonitorState, TrackerStatus, UpdateState } from '../shared/types'
 
 const heartbeatSeconds = Number(import.meta.env.VITE_TRACKER_HEARTBEAT_INTERVAL_SECONDS ?? 15)
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'https://api.horizonboost.com.br/api'
@@ -27,6 +29,15 @@ const initialState: MonitorState = {
   latestSnapshot: null,
   lastHeartbeatAt: null,
   lastError: null,
+  updates: {
+    status: 'idle',
+    currentVersion: '0.0.0',
+    availableVersion: null,
+    progress: null,
+    downloaded: false,
+    lastCheckedAt: null,
+    error: null,
+  },
 }
 
 const statusLabels: Record<TrackerStatus, string> = {
@@ -46,16 +57,116 @@ function App() {
   const [isTracking, setIsTracking] = useState(false)
   const [isLoadingOrders, setIsLoadingOrders] = useState(false)
   const [isLoggingIn, setIsLoggingIn] = useState(false)
+  const [authFeedback, setAuthFeedback] = useState<string | null>(null)
+  const [activityLog, setActivityLog] = useState<string[]>([])
+  const latestSnapshotByOrderRef = useRef<Record<number, LcuSnapshot | null>>({})
+  const reportedMatchKeysRef = useRef<Set<string>>(new Set())
   const [form, setForm] = useState<LoginPayload>({
     apiBaseUrl,
     email: '',
     password: '',
+    twoFactorCode: '',
   })
 
   const selectedOrder = useMemo(
     () => orders.find((order) => order.id === selectedOrderId) ?? null,
     [orders, selectedOrderId],
   )
+
+  const addLog = useCallback((message: string) => {
+    const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    setActivityLog((current) => [`[${time}] ${message}`, ...current].slice(0, 8))
+    console.info(`[${time}] ${message}`)
+  }, [])
+
+  const loadOrders = useCallback(async () => {
+    if (!window.horizonBoostDesktop) {
+      return
+    }
+
+    setIsLoadingOrders(true)
+
+    try {
+      const nextOrders = await window.horizonBoostDesktop.getOrders()
+      setOrders(nextOrders)
+      setSelectedOrderId((current) => current ?? nextOrders[0]?.id ?? null)
+      addLog(`${nextOrders.length} pedido(s) atribuido(s) carregado(s).`)
+    } catch (error) {
+      const message = toErrorMessage(error)
+      addLog(message)
+      setState((current) => ({ ...current, lastError: message }))
+    } finally {
+      setIsLoadingOrders(false)
+    }
+  }, [addLog])
+
+  const maybeReportMatchFinished = useCallback(async (orderId: number, snapshot: LcuSnapshot) => {
+    if (!window.horizonBoostDesktop || snapshot.status !== 'GAME_ENDED') {
+      return
+    }
+
+    const previousSnapshot = latestSnapshotByOrderRef.current[orderId]
+    const previousGame = previousSnapshot?.currentGame
+    const currentGame = snapshot.currentGame ?? previousGame
+    const wasInGame = previousSnapshot?.status === 'IN_GAME'
+
+    if (!currentGame || (!wasInGame && !currentGame.gameId)) {
+      return
+    }
+
+    const matchKey = `${orderId}:${currentGame.gameId ?? currentGame.startedAt ?? snapshot.capturedAt}`
+
+    if (reportedMatchKeysRef.current.has(matchKey)) {
+      return
+    }
+
+    reportedMatchKeysRef.current.add(matchKey)
+
+    await window.horizonBoostDesktop.matchFinished({
+      orderId,
+      gameId: currentGame.gameId,
+      riotPuuid: snapshot.riotAccount?.puuid ?? previousSnapshot?.riotAccount?.puuid,
+      championId: currentGame.championId,
+      queueId: currentGame.queueId,
+      result: 'UNKNOWN',
+      startedAt: currentGame.startedAt ?? previousGame?.startedAt,
+      endedAt: snapshot.capturedAt,
+      rawData: {
+        source: 'desktop-lcu',
+        gameflowPhase: snapshot.gameflowPhase,
+        capturedAt: snapshot.capturedAt,
+      },
+    })
+
+    addLog(`Partida finalizada registrada no pedido #${orderId}.`)
+  }, [addLog])
+
+  const sendHeartbeat = useCallback(async (orderId: number) => {
+    if (!window.horizonBoostDesktop) {
+      return
+    }
+
+    try {
+      const snapshot = await window.horizonBoostDesktop.lcuSnapshot()
+
+      await window.horizonBoostDesktop.heartbeat({
+        orderId,
+        status: snapshot.status,
+        riotAccount: snapshot.riotAccount,
+        currentGame: snapshot.currentGame,
+        rankedProgress: snapshot.rankedProgress,
+      })
+
+      await maybeReportMatchFinished(orderId, snapshot)
+      latestSnapshotByOrderRef.current[orderId] = snapshot
+
+      addLog(`${statusLabels[snapshot.status]} sincronizado no pedido #${orderId}.`)
+    } catch (error) {
+      const message = toErrorMessage(error)
+      addLog(message)
+      setState((current) => ({ ...current, lastError: message }))
+    }
+  }, [addLog, maybeReportMatchFinished])
 
   useEffect(() => {
     if (!window.horizonBoostDesktop) {
@@ -81,20 +192,25 @@ function App() {
       active = false
       unsubscribe()
     }
-  }, [])
+  }, [loadOrders])
 
   useEffect(() => {
     if (!isTracking || !selectedOrderId) {
       return
     }
 
-    void sendHeartbeat(selectedOrderId)
+    const initialTimer = window.setTimeout(() => {
+      void sendHeartbeat(selectedOrderId)
+    }, 0)
     const timer = window.setInterval(() => {
       void sendHeartbeat(selectedOrderId)
     }, Math.max(5, heartbeatSeconds) * 1000)
 
-    return () => window.clearInterval(timer)
-  }, [isTracking, selectedOrderId])
+    return () => {
+      window.clearTimeout(initialTimer)
+      window.clearInterval(timer)
+    }
+  }, [isTracking, selectedOrderId, sendHeartbeat])
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -104,6 +220,7 @@ function App() {
     }
 
     setIsLoggingIn(true)
+    setAuthFeedback(null)
 
     try {
       const nextState = await window.horizonBoostDesktop.login(form)
@@ -111,50 +228,11 @@ function App() {
       addLog(`Login autorizado para ${nextState.session?.user?.email ?? form.email}.`)
       await loadOrders()
     } catch (error) {
-      addLog(toErrorMessage(error))
+      const message = toErrorMessage(error)
+      setAuthFeedback(message)
+      addLog(message)
     } finally {
       setIsLoggingIn(false)
-    }
-  }
-
-  async function loadOrders() {
-    if (!window.horizonBoostDesktop) {
-      return
-    }
-
-    setIsLoadingOrders(true)
-
-    try {
-      const nextOrders = await window.horizonBoostDesktop.getOrders()
-      setOrders(nextOrders)
-      setSelectedOrderId((current) => current ?? nextOrders[0]?.id ?? null)
-      addLog(`${nextOrders.length} pedido(s) atribuido(s) carregado(s).`)
-    } catch (error) {
-      addLog(toErrorMessage(error))
-    } finally {
-      setIsLoadingOrders(false)
-    }
-  }
-
-  async function sendHeartbeat(orderId: number) {
-    if (!window.horizonBoostDesktop) {
-      return
-    }
-
-    try {
-      const snapshot = await window.horizonBoostDesktop.lcuSnapshot()
-
-      await window.horizonBoostDesktop.heartbeat({
-        orderId,
-        status: snapshot.status,
-        riotAccount: snapshot.riotAccount,
-        currentGame: snapshot.currentGame,
-        rankedProgress: snapshot.rankedProgress,
-      })
-
-      addLog(`${statusLabels[snapshot.status]} sincronizado no pedido #${orderId}.`)
-    } catch (error) {
-      addLog(toErrorMessage(error))
     }
   }
 
@@ -169,9 +247,60 @@ function App() {
     setState(await window.horizonBoostDesktop.logout())
   }
 
-  function addLog(message: string) {
-    const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-    console.info(`[${time}] ${message}`)
+  async function handleCheckForUpdates() {
+    if (!window.horizonBoostDesktop) {
+      return
+    }
+
+    try {
+      const updates = await window.horizonBoostDesktop.checkForUpdates()
+      setState((current) => ({ ...current, updates }))
+      addLog(updateLogMessage(updates))
+    } catch (error) {
+      const message = toErrorMessage(error)
+      addLog(message)
+      setState((current) => ({
+        ...current,
+        updates: { ...current.updates, status: 'error', error: message },
+      }))
+    }
+  }
+
+  async function handleDownloadUpdate() {
+    if (!window.horizonBoostDesktop) {
+      return
+    }
+
+    try {
+      const updates = await window.horizonBoostDesktop.downloadUpdate()
+      setState((current) => ({ ...current, updates }))
+      addLog('Download da atualizacao iniciado.')
+    } catch (error) {
+      const message = toErrorMessage(error)
+      addLog(message)
+      setState((current) => ({
+        ...current,
+        updates: { ...current.updates, status: 'error', error: message },
+      }))
+    }
+  }
+
+  async function handleInstallUpdate() {
+    if (!window.horizonBoostDesktop) {
+      return
+    }
+
+    try {
+      await window.horizonBoostDesktop.installUpdate()
+      addLog('Instalando atualizacao e reiniciando o Tracker.')
+    } catch (error) {
+      const message = toErrorMessage(error)
+      addLog(message)
+      setState((current) => ({
+        ...current,
+        updates: { ...current.updates, status: 'error', error: message },
+      }))
+    }
   }
 
   if (!state.isAuthenticated) {
@@ -179,13 +308,24 @@ function App() {
       <main className="tracker-shell tracker-shell--login">
         <section className="login-card panel">
           <div className="brand-mark">
-            <img alt="" src="/horizon-poro-transparent.png" />
+            <img alt="" src="./horizon-poro-transparent.png" />
           </div>
           <span className="eyebrow">Horizon Boost Tracker</span>
           <h1>Login do booster</h1>
           <p>Entre com sua conta da plataforma para ver os servicos atribuidos.</p>
 
           <form className="login-form" onSubmit={handleLogin}>
+            <details className="advanced-settings">
+              <summary>Servidor da plataforma</summary>
+              <label className="field">
+                <span>URL da API</span>
+                <input
+                  onChange={(event) => setForm((current) => ({ ...current, apiBaseUrl: event.target.value }))}
+                  value={form.apiBaseUrl}
+                />
+              </label>
+              <small>Mantenha o padrao. Altere apenas se o suporte orientar.</small>
+            </details>
             <label className="field">
               <span>Email</span>
               <input
@@ -201,11 +341,29 @@ function App() {
                 value={form.password}
               />
             </label>
+            <label className="field">
+              <span>Codigo 2FA</span>
+              <input
+                inputMode="numeric"
+                maxLength={6}
+                onChange={(event) => setForm((current) => ({
+                  ...current,
+                  twoFactorCode: event.target.value.replace(/\D/g, '').slice(0, 6),
+                }))}
+                placeholder="Se solicitado"
+                value={form.twoFactorCode ?? ''}
+              />
+            </label>
             <button className="primary-button" disabled={isLoggingIn} type="submit">
               <ShieldCheck size={18} />
               {isLoggingIn ? 'Entrando...' : 'Entrar'}
             </button>
           </form>
+          {authFeedback ? (
+            <div className="tracker-alert" role="alert">
+              {authFeedback}
+            </div>
+          ) : null}
         </section>
       </main>
     )
@@ -216,7 +374,7 @@ function App() {
       <aside className="tracker-sidebar panel">
         <div className="brand-row">
           <div className="brand-mark">
-            <img alt="" src="/horizon-poro-transparent.png" />
+            <img alt="" src="./horizon-poro-transparent.png" />
           </div>
           <div>
             <span className="eyebrow">Tracker</span>
@@ -257,6 +415,12 @@ function App() {
             <span>{formatRiotAccount(state.latestSnapshot)}</span>
           </div>
         </section>
+
+        {state.lastError ? (
+          <div className="tracker-alert" role="alert">
+            {state.lastError}
+          </div>
+        ) : null}
 
         <section className="tracker-grid">
         <section className="panel orders-panel" id="pedidos">
@@ -320,11 +484,98 @@ function App() {
 
           <ProgressPanel order={selectedOrder} snapshot={state.latestSnapshot} />
           {selectedOrder ? <OrderSummary order={selectedOrder} /> : null}
+          <UpdatePanel
+            onCheck={() => void handleCheckForUpdates()}
+            onDownload={() => void handleDownloadUpdate()}
+            onInstall={() => void handleInstallUpdate()}
+            updates={state.updates}
+          />
+          <ActivityPanel items={activityLog} />
         </section>
 
         </section>
       </div>
     </main>
+  )
+}
+
+function UpdatePanel({
+  onCheck,
+  onDownload,
+  onInstall,
+  updates,
+}: {
+  onCheck: () => void
+  onDownload: () => void
+  onInstall: () => void
+  updates: UpdateState
+}) {
+  const isChecking = updates.status === 'checking'
+  const isDownloading = updates.status === 'downloading'
+  const isInstalling = updates.status === 'installing'
+  const canDownload = updates.status === 'available'
+  const canInstall = updates.status === 'downloaded' || updates.downloaded
+
+  return (
+    <div className="update-panel">
+      <div className="update-panel__header">
+        <div>
+          <span>Atualizacoes</span>
+          <strong>{updateStatusLabel(updates)}</strong>
+        </div>
+        <PackageCheck size={21} />
+      </div>
+
+      <div className="update-panel__meta">
+        <span>Instalada: {updates.currentVersion}</span>
+        <span>Disponivel: {updates.availableVersion ?? 'Nenhuma'}</span>
+      </div>
+
+      {isDownloading ? (
+        <div className="progress-track update-panel__progress" aria-label="Progresso do download da atualizacao">
+          <span style={{ width: `${Math.max(0, Math.min(100, updates.progress ?? 0))}%` }} />
+        </div>
+      ) : null}
+
+      {updates.error ? (
+        <p className="update-panel__error">{updates.error}</p>
+      ) : null}
+
+      <div className="update-panel__actions">
+        <button className="ghost-button" disabled={isChecking || isDownloading || isInstalling} onClick={onCheck} type="button">
+          <RefreshCw className={isChecking ? 'spin-icon' : undefined} size={16} />
+          Verificar
+        </button>
+        <button className="ghost-button" disabled={!canDownload || isDownloading || isInstalling} onClick={onDownload} type="button">
+          <CloudDownload className={isDownloading ? 'spin-icon' : undefined} size={16} />
+          Baixar update
+        </button>
+        <button className="primary-button" disabled={!canInstall || isInstalling} onClick={onInstall} type="button">
+          <PackageCheck size={16} />
+          Instalar
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ActivityPanel({ items }: { items: string[] }) {
+  return (
+    <div className="activity-panel">
+      <div className="activity-panel__header">
+        <span>Eventos recentes</span>
+        <strong>{items.length}</strong>
+      </div>
+      {items.length ? (
+        <ul>
+          {items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : (
+        <p>Nenhum evento registrado nesta sessao.</p>
+      )}
+    </div>
   )
 }
 
@@ -479,6 +730,37 @@ function formatRiotAccount(snapshot: LcuSnapshot | null) {
   }
 
   return riot.tagLine ? `${riot.gameName ?? riot.summonerName}#${riot.tagLine}` : riot.summonerName ?? 'Detectada'
+}
+
+function updateStatusLabel(updates: UpdateState) {
+  const labels: Record<UpdateState['status'], string> = {
+    idle: 'Aguardando verificacao',
+    checking: 'Verificando release',
+    available: `Versao ${updates.availableVersion ?? 'nova'} disponivel`,
+    'not-available': 'Voce esta na versao mais recente',
+    downloading: `Baixando ${Math.round(updates.progress ?? 0)}%`,
+    downloaded: 'Pronta para instalar',
+    installing: 'Reiniciando para instalar',
+    error: 'Verificacao indisponivel',
+  }
+
+  return labels[updates.status]
+}
+
+function updateLogMessage(updates: UpdateState) {
+  if (updates.status === 'available') {
+    return `Atualizacao ${updates.availableVersion ?? ''} disponivel.`
+  }
+
+  if (updates.status === 'not-available') {
+    return 'Nenhuma atualizacao disponivel.'
+  }
+
+  if (updates.status === 'error' && updates.error) {
+    return updates.error
+  }
+
+  return 'Verificacao de atualizacao executada.'
 }
 
 function toErrorMessage(error: unknown): string {

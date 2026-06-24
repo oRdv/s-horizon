@@ -169,6 +169,7 @@ class UserManagementController extends Controller
             'booster_profile.accepts_initial_percentage' => ['nullable', 'boolean'],
             'booster_profile.opgg_url' => ['nullable', 'string', 'max:255'],
             'booster_profile.discord_username' => ['nullable', 'string', 'max:120'],
+            'booster_profile.discord_user_id' => ['nullable', 'string', 'regex:/^\d{15,32}$/'],
             'booster_profile.diamond_plus_eta' => ['nullable', 'string', 'max:255'],
             'booster_profile.accepts_cashflow_decay' => ['nullable', 'boolean'],
         ];

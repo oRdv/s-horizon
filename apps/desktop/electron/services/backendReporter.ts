@@ -10,10 +10,15 @@ import type {
 
 interface AuthResponse {
   data: {
-    user: DesktopSession['user']
+    user?: DesktopSession['user']
+    security?: {
+      dev_token?: string
+    }
   }
-  access_token: string
-  refresh_token: string
+  access_token?: string
+  refresh_token?: string
+  message?: string
+  requires_two_factor?: boolean
 }
 
 const httpsAgent = new https.Agent({
@@ -56,12 +61,26 @@ export class BackendReporter {
       {
         email: payload.email,
         password: payload.password,
+        two_factor_code: payload.twoFactorCode || undefined,
       },
       {
         headers: JSON_HEADERS,
         httpsAgent,
       },
     )
+
+    if (response.data.requires_two_factor) {
+      const devToken = response.data.data?.security?.dev_token
+      throw new Error(
+        devToken
+          ? `Codigo de 2FA enviado. Ambiente local: use ${devToken}.`
+          : response.data.message ?? 'Informe o codigo de 2FA enviado para seu email.',
+      )
+    }
+
+    if (!response.data.access_token || !response.data.data.user) {
+      throw new Error('Resposta de login incompleta. Tente entrar novamente.')
+    }
 
     const session: DesktopSession = {
       apiBaseUrl,
@@ -141,6 +160,10 @@ export class BackendReporter {
         httpsAgent,
       },
     )
+
+    if (!response.data.access_token || !response.data.data.user) {
+      throw new Error('Sessao nao renovada pelo backend.')
+    }
 
     this.session = {
       apiBaseUrl: session.apiBaseUrl,

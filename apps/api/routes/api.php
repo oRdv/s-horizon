@@ -31,6 +31,10 @@ Route::post('/booster-applications/public', [BoosterApplicationController::class
 Route::get('/landing/boosters', [LandingBoosterController::class, 'publicIndex']);
 Route::post('/payments/stripe/webhook', [PaymentController::class, 'stripeWebhook']);
 Route::post('/payments/mercado-pago/webhook', [PaymentController::class, 'mercadoPagoWebhook']);
+Route::get('/booster-tracker/downloads/{platform}/signed', [BoosterTrackerController::class, 'signedDownload'])
+    ->middleware('signed')
+    ->name('tracker.download.signed')
+    ->where('platform', 'windows');
 
 Route::middleware('auth.jwt')->group(function (): void {
     Route::get('/me', [AuthController::class, 'me']);
@@ -132,6 +136,10 @@ Route::middleware('auth.jwt')->group(function (): void {
     });
 
     Route::prefix('booster-tracker')->group(function (): void {
+        Route::get('/release', [BoosterTrackerController::class, 'release']);
+        Route::post('/events', [BoosterTrackerController::class, 'event']);
+        Route::get('/download/{platform}', [BoosterTrackerController::class, 'download'])
+            ->where('platform', 'windows');
         Route::post('/heartbeat', [BoosterTrackerController::class, 'heartbeat']);
         Route::post('/link-riot-account', [BoosterTrackerController::class, 'linkRiotAccount']);
         Route::get('/orders/{serviceOrder}/status', [BoosterTrackerController::class, 'orderStatus']);
