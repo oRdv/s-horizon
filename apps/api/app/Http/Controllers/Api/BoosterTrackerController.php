@@ -10,15 +10,32 @@ use App\Models\BoosterTrackerSession;
 use App\Models\ServiceOrder;
 use App\Models\TrackedMatch;
 use App\Models\User;
+use App\Services\Audit\AccountAuditService;
 use App\Services\Riot\RiotApiService;
+use App\Services\Tracker\TrackerReleaseService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class BoosterTrackerController extends Controller
 {
+    public function __construct(private readonly TrackerReleaseService $releases)
+    {
+    }
+
+    private const EVENT_TYPES = [
+        'setup_opened',
+        'download_started',
+        'download_unavailable',
+        'install_step_viewed',
+        'status_refreshed',
+    ];
+
     private const STATUSES = [
         'ONLINE',
         'OFFLINE',
@@ -29,7 +46,138 @@ class BoosterTrackerController extends Controller
         'GAME_ENDED',
     ];
 
-    public function heartbeat(Request $request): JsonResponse
+    public function release(Request $request, AccountAuditService $audit): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        if (! $user->hasRole(UserRole::Booster)) {
+            return response()->json(['message' => 'Somente boosters podem acessar o Tracker.'], 403);
+        }
+
+        $audit->record('tracker.release_viewed', $user, $user, $request, $user, [
+            'platform' => $request->query('platform'),
+        ]);
+
+        $windowsDownload = $this->downloadMetadata('windows', $user);
+
+        return response()->json([
+            'data' => [
+                'app_name' => 'Horizon Boost Tracker',
+                'version' => $windowsDownload['version'] ?? config('tracker.download.version'),
+                'heartbeat_interval_seconds' => config('tracker.heartbeat_interval_seconds'),
+                'downloads' => [
+                    'windows' => $windowsDownload,
+                ],
+                'requirements' => [
+                    'windows' => [
+                        'label' => 'Windows 10 ou superior',
+                        'league_client_required' => true,
+                    ],
+                    'mobile' => [
+                        'supported' => false,
+                        'message' => 'Android e iPhone podem acompanhar o guia, mas o Tracker precisa rodar no PC com League of Legends.',
+                    ],
+                ],
+            ],
+        ]);
+    }
+
+    public function event(Request $request, AccountAuditService $audit): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        if (! $user->hasRole(UserRole::Booster)) {
+            return response()->json(['message' => 'Somente boosters podem registrar eventos do Tracker.'], 403);
+        }
+
+        $validated = $request->validate([
+            'type' => ['required', Rule::in(self::EVENT_TYPES)],
+            'platform' => ['nullable', 'string', 'max:32'],
+            'metadata' => ['nullable', 'array'],
+        ]);
+
+        $audit->record('tracker.'.$validated['type'], $user, $user, $request, $user, [
+            'platform' => $validated['platform'] ?? null,
+            'metadata' => $validated['metadata'] ?? [],
+        ]);
+
+        return response()->json([
+            'message' => 'Evento registrado.',
+            'data' => [
+                'event' => $validated['type'],
+            ],
+        ]);
+    }
+
+    public function signedDownload(Request $request, string $platform, AccountAuditService $audit): JsonResponse|BinaryFileResponse|RedirectResponse
+    {
+        $user = null;
+        $userId = $request->integer('user');
+
+        if ($userId > 0) {
+            $user = User::query()->find($userId);
+        }
+
+        if (! $user || ! $user->hasRole(UserRole::Booster)) {
+            return response()->json(['message' => 'Link de download invalido ou expirado.'], 403);
+        }
+
+        return $this->respondWithDownload($request, $platform, $audit, $user);
+    }
+
+    public function download(Request $request, string $platform, AccountAuditService $audit): JsonResponse|BinaryFileResponse|RedirectResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        if (! $user->hasRole(UserRole::Booster)) {
+            return response()->json(['message' => 'Somente boosters podem baixar o Tracker.'], 403);
+        }
+
+        return $this->respondWithDownload($request, $platform, $audit, $user);
+    }
+
+    private function respondWithDownload(
+        Request $request,
+        string $platform,
+        AccountAuditService $audit,
+        User $user,
+    ): JsonResponse|BinaryFileResponse|RedirectResponse {
+        $metadata = $this->releases->metadata($platform);
+
+        if (! $metadata['available']) {
+            $audit->record('tracker.download_unavailable', $user, $user, $request, $user, [
+                'platform' => $platform,
+                'provider' => $metadata['provider'] ?? null,
+                'error' => $metadata['error'] ?? null,
+            ]);
+
+            return response()->json([
+                'message' => 'O instalador do Tracker ainda nao foi publicado para este ambiente.',
+                'data' => [
+                    'download' => $this->sanitizeDownloadMetadata($metadata),
+                ],
+            ], 404);
+        }
+
+        $audit->record('tracker.download_started', $user, $user, $request, $user, [
+            'platform' => $platform,
+            'filename' => $metadata['filename'],
+            'size_bytes' => $metadata['size_bytes'],
+            'version' => $metadata['version'] ?? config('tracker.download.version'),
+            'provider' => $metadata['provider'] ?? null,
+        ]);
+
+        if (filled($metadata['direct_url'] ?? null)) {
+            return redirect()->away((string) $metadata['direct_url']);
+        }
+
+        return response()->download((string) $metadata['path'], (string) $metadata['filename']);
+    }
+
+    public function heartbeat(Request $request, AccountAuditService $audit): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
@@ -86,6 +234,7 @@ class BoosterTrackerController extends Controller
             ->where('booster_id', $user->getKey())
             ->where('service_order_id', $order->getKey())
             ->first();
+        $previousStatus = $previousSession?->status;
         $lpDelta = $this->calculateLpDelta($previousSession?->ranked_snapshot, $rankedProgress);
         $progressPercent = $this->calculateProgressPercent($order, $rankedProgress);
 
@@ -122,6 +271,19 @@ class BoosterTrackerController extends Controller
                 'status' => ServiceOrderStatus::InProgress->value,
                 'started_at' => $order->started_at ?: $now,
             ])->save();
+        }
+
+        if (! $previousSession) {
+            $audit->record('tracker.heartbeat_started', $user, $user, $request, $order, [
+                'service_order_id' => $order->getKey(),
+                'status' => $validated['status'],
+            ]);
+        } elseif ($previousStatus !== $validated['status']) {
+            $audit->record('tracker.status_changed', $user, $user, $request, $order, [
+                'service_order_id' => $order->getKey(),
+                'from' => $previousStatus,
+                'to' => $validated['status'],
+            ]);
         }
 
         return response()->json([
@@ -211,7 +373,7 @@ class BoosterTrackerController extends Controller
         ]);
     }
 
-    public function matchFinished(Request $request, RiotApiService $riot): JsonResponse
+    public function matchFinished(Request $request, RiotApiService $riot, AccountAuditService $audit): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
@@ -278,6 +440,13 @@ class BoosterTrackerController extends Controller
                 'last_heartbeat_at' => now(),
             ]);
 
+        $audit->record('tracker.match_finished', $user, $user, $request, $order, [
+            'service_order_id' => $order->getKey(),
+            'match_id' => $match->match_id,
+            'game_id' => $match->game_id,
+            'result' => $match->result,
+        ]);
+
         return response()->json([
             'message' => 'Partida registrada.',
             'data' => ['match' => $match],
@@ -315,6 +484,33 @@ class BoosterTrackerController extends Controller
                 'verified_at' => now(),
             ],
         );
+    }
+
+    private function downloadMetadata(string $platform, User $user): array
+    {
+        $metadata = $this->sanitizeDownloadMetadata($this->releases->metadata($platform));
+        $expiresAt = now()->addMinutes(max(1, (int) config('tracker.download.signed_url_ttl_minutes', 10)));
+
+        $metadata['label'] = $platform === 'windows' ? 'Windows' : strtoupper($platform);
+        $metadata['url'] = URL::temporarySignedRoute('tracker.download.signed', $expiresAt, [
+            'platform' => $platform,
+            'user' => $user->getKey(),
+        ]);
+        $metadata['expires_at'] = $expiresAt->toIso8601String();
+
+        return $metadata;
+    }
+
+    /**
+     * @param array<string,mixed> $metadata
+     *
+     * @return array<string,mixed>
+     */
+    private function sanitizeDownloadMetadata(array $metadata): array
+    {
+        unset($metadata['path'], $metadata['direct_url']);
+
+        return $metadata;
     }
 
     private function canAccessOrder(User $user, ServiceOrder $order): bool

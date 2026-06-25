@@ -9,6 +9,7 @@ use App\Enums\ServiceOrderStatus;
 use App\Models\Payment;
 use App\Models\ServiceOrder;
 use App\Models\User;
+use App\Services\Notifications\OrderNotificationService;
 use App\Services\Orders\OrderChatService;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -159,6 +160,9 @@ final class PaymentService
 
         if ($payment->serviceOrder?->booster_id) {
             app(OrderChatService::class)->ensureConversation($payment->serviceOrder->refresh());
+            app(OrderNotificationService::class)->assigned($payment->serviceOrder->refresh());
+        } else {
+            app(OrderNotificationService::class)->available($payment->serviceOrder->refresh()->loadMissing('customer'));
         }
 
         return $payment->refresh();

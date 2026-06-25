@@ -9,6 +9,7 @@ use App\Models\ServiceOrder;
 use App\Models\User;
 use App\Models\WithdrawalRequest;
 use App\Services\Audit\AccountAuditService;
+use App\Services\Orders\BoosterPayoutService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -38,7 +39,7 @@ class WithdrawalRequestController extends Controller
         ]);
     }
 
-    public function store(Request $request, AccountAuditService $audit): JsonResponse
+    public function store(Request $request, AccountAuditService $audit, BoosterPayoutService $payouts): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
@@ -91,15 +92,15 @@ class WithdrawalRequestController extends Controller
                 ]);
             }
 
-            $grossAmount = $order->final_price ? ((int) $order->final_price / 100) : (float) $order->price;
-            $basePayout = round($grossAmount * 0.6, 2);
+            $grossAmount = $payouts->totalAmount($order);
+            $basePayout = $payouts->payoutAmount($order);
             $bonusAmount = round((float) ($validated['bonus_amount'] ?? 0), 2);
             $amount = round($basePayout + $bonusAmount, 2);
             $metadata = array_merge($metadata, [
                 'service_order_id' => $order->getKey(),
                 'service_order_title' => $order->title,
                 'source' => 'completed_boost',
-                'payout_percent' => 60,
+                'payout_percent' => $payouts->percentForMetadata(),
                 'gross_amount' => $grossAmount,
                 'base_payout_amount' => $basePayout,
                 'bonus_amount' => $bonusAmount,

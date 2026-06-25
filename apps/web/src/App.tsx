@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { ToastViewport } from '@/components/ToastViewport'
 import { AdminUsersPage } from '@/pages/AdminUsersPage'
 import { BoosterApplicationPage } from '@/pages/BoosterApplicationPage'
+import { BoosterOrderDetailPage } from '@/pages/BoosterOrderDetailPage'
 import { BoosterOrdersPage } from '@/pages/BoosterOrdersPage'
 import { LandingPage } from '@/pages/LandingPage'
 import { LoginPage } from '@/pages/LoginPage'
@@ -22,6 +23,7 @@ import { authService } from '@/services/auth'
 import { useSessionStore } from '@/store/useSessionStore'
 
 function App() {
+  const location = useLocation()
   const hydrated = useSessionStore((state) => state.hydrated)
   const user = useSessionStore((state) => state.user)
   const accessToken = useSessionStore((state) => state.accessToken)
@@ -79,11 +81,18 @@ function App() {
     return '/dashboard'
   }
 
+  const getLoginRedirectPath = () => {
+    if (!user) return getHomePath()
+    if (!user.email_verified_at) return '/verify-email'
+
+    return sanitizeInternalRedirect(new URLSearchParams(location.search).get('redirect')) ?? getHomePath()
+  }
+
   return (
     <>
       <Routes>
         <Route element={<LandingPage />} path="/" />
-        <Route element={user ? <Navigate replace to={getHomePath()} /> : <LoginPage />} path="/login" />
+        <Route element={user ? <Navigate replace to={getLoginRedirectPath()} /> : <LoginPage />} path="/login" />
         <Route element={user ? <Navigate replace to={getHomePath()} /> : <SignupPage />} path="/signup" />
         <Route element={user ? <Navigate replace to={getHomePath()} /> : <ForgotPasswordPage />} path="/forgot-password" />
         <Route element={user ? <Navigate replace to={getHomePath()} /> : <ResetPasswordPage />} path="/reset-password" />
@@ -172,6 +181,14 @@ function App() {
         />
         <Route
           element={
+            <ProtectedRoute roles={['booster']}>
+              <BoosterOrderDetailPage />
+            </ProtectedRoute>
+          }
+          path="/booster/orders/:orderId"
+        />
+        <Route
+          element={
             <ProtectedRoute roles={['customer']}>
               <PaymentResultPage kind="success" />
             </ProtectedRoute>
@@ -207,6 +224,14 @@ function App() {
       <ToastViewport />
     </>
   )
+}
+
+function sanitizeInternalRedirect(value: string | null): string | null {
+  if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('://')) {
+    return null
+  }
+
+  return value
 }
 
 export default App

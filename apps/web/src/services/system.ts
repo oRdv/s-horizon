@@ -18,6 +18,8 @@ import type {
   OrderChatMessage,
   ServiceOrder,
   StaffDashboard,
+  TrackerDownloadMetadata,
+  TrackerRelease,
   UsersResponse,
   WithdrawalRequest,
 } from '@/types/system'
@@ -237,6 +239,41 @@ export const systemService = {
     return response.data.data
   },
 
+  async getTrackerRelease(platform?: string): Promise<TrackerRelease> {
+    const response = await apiClient.get<DashboardResponse<TrackerRelease>>('/booster-tracker/release', {
+      params: platform ? { platform } : undefined,
+    })
+
+    return response.data.data
+  },
+
+  async recordTrackerEvent(type: string, metadata?: Record<string, unknown>, platform?: string): Promise<void> {
+    await apiClient.post('/booster-tracker/events', {
+      type,
+      platform,
+      metadata,
+    })
+  },
+
+  async downloadTracker(download: TrackerDownloadMetadata): Promise<{ filename: string; size: number }> {
+    if (!download.url) {
+      throw new Error('Link de download indisponivel. Atualize o guia e tente novamente.')
+    }
+
+    const link = document.createElement('a')
+    link.href = download.url
+    link.download = download.filename
+    link.rel = 'noopener'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+
+    return {
+      filename: download.filename,
+      size: download.size_bytes ?? 0,
+    }
+  },
+
   async getLiveBoosters(): Promise<BoosterTrackerSession[]> {
     const response = await apiClient.get<DashboardResponse<{ boosters: BoosterTrackerSession[] }>>(
       '/admin/boosters/live',
@@ -352,6 +389,7 @@ export const systemService = {
   async requestProfileChange(payload: {
     name?: string
     profile_photo_path?: string
+    booster_profile?: Pick<BoosterProfile, 'discord_username' | 'discord_user_id'>
     password?: string
     password_confirmation?: string
   }): Promise<{ purpose: string; security: { token_sent: boolean; dev_token?: string } }> {

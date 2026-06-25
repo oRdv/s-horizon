@@ -1,6 +1,6 @@
 import type { FormEvent } from 'react'
 import { useState } from 'react'
-import { KeyRound, MailCheck, ShieldCheck, UserRound } from 'lucide-react'
+import { KeyRound, MailCheck, MessageCircle, ShieldCheck, UserRound } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 import { AppShell } from '@/components/AppShell'
@@ -17,6 +17,8 @@ export function ProfilePage() {
   const setUser = useSessionStore((state) => state.setUser)
   const addToast = useToastStore((state) => state.addToast)
   const [name, setName] = useState(user?.name ?? '')
+  const [discordUsername, setDiscordUsername] = useState(user?.booster_profile?.discord_username ?? '')
+  const [discordUserId, setDiscordUserId] = useState(user?.booster_profile?.discord_user_id ?? '')
   const [password, setPassword] = useState('')
   const [passwordConfirmation, setPasswordConfirmation] = useState('')
   const [pendingPurpose, setPendingPurpose] = useState('')
@@ -31,7 +33,17 @@ export function ProfilePage() {
     event.preventDefault()
 
     try {
-      const response = await systemService.requestProfileChange({ name })
+      const response = await systemService.requestProfileChange({
+        name,
+        ...(user?.role === 'booster'
+          ? {
+              booster_profile: {
+                discord_username: discordUsername.trim() || null,
+                discord_user_id: discordUserId.trim() || null,
+              },
+            }
+          : {}),
+      })
 
       setPendingPurpose(response.purpose)
       setToken('')
@@ -90,6 +102,9 @@ export function ProfilePage() {
       const updatedUser = await systemService.confirmProfileChange({ purpose: pendingPurpose, token })
 
       setUser(updatedUser)
+      setName(updatedUser.name)
+      setDiscordUsername(updatedUser.booster_profile?.discord_username ?? '')
+      setDiscordUserId(updatedUser.booster_profile?.discord_user_id ?? '')
       setToken('')
       setPendingPurpose('')
       if (pendingPurpose === 'password_change') {
@@ -192,8 +207,28 @@ export function ProfilePage() {
         <section className="system-grid-two">
           <form className="management-panel panel" onSubmit={handleProfileRequest}>
             <UserRound size={22} />
-            <h2>Alterar nome</h2>
+            <h2>Alterar perfil</h2>
             <input value={name} onChange={(event) => setName(event.target.value)} />
+            {user?.role === 'booster' ? (
+              <>
+                <div className="inline-form__label">
+                  <MessageCircle size={16} />
+                  <span>Discord do booster</span>
+                </div>
+                <input
+                  inputMode="text"
+                  onChange={(event) => setDiscordUsername(event.target.value)}
+                  placeholder="usuario ou display name"
+                  value={discordUsername}
+                />
+                <input
+                  inputMode="numeric"
+                  onChange={(event) => setDiscordUserId(event.target.value.replace(/\D/g, '').slice(0, 32))}
+                  placeholder="Discord user ID"
+                  value={discordUserId}
+                />
+              </>
+            ) : null}
             <button className="primary-button" type="submit">
               Enviar código
             </button>

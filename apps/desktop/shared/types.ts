@@ -105,12 +105,34 @@ export interface MonitorState {
   latestSnapshot: LcuSnapshot | null
   lastHeartbeatAt: string | null
   lastError: string | null
+  updates: UpdateState
+}
+
+export type UpdateStatus =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'not-available'
+  | 'downloading'
+  | 'downloaded'
+  | 'installing'
+  | 'error'
+
+export interface UpdateState {
+  status: UpdateStatus
+  currentVersion: string
+  availableVersion: string | null
+  progress: number | null
+  downloaded: boolean
+  lastCheckedAt: string | null
+  error: string | null
 }
 
 export interface LoginPayload {
   apiBaseUrl: string
   email: string
   password: string
+  twoFactorCode?: string
 }
 
 export interface HeartbeatPayload {

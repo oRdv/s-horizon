@@ -18,6 +18,7 @@ import { useNavigate } from 'react-router-dom'
 import QRCode from 'qrcode'
 
 import { AppShell } from '@/components/AppShell'
+import { getBoosterPayoutAmount } from '@/config/payout'
 import { getApiErrorMessage } from '@/services/api/errors'
 import { authService } from '@/services/auth'
 import { systemService } from '@/services/system'
@@ -93,7 +94,7 @@ function getWithdrawalOrderId(withdrawal: WithdrawalRequest) {
 }
 
 function getOrderWithdrawalAmount(order: ServiceOrder) {
-  return Number(order.final_price ?? order.latest_payment?.finalAmount ?? order.latest_payment?.amount ?? order.price) * 0.6
+  return getBoosterPayoutAmount(order.final_price ?? order.latest_payment?.finalAmount ?? order.latest_payment?.amount ?? order.price)
 }
 
 function metadataNumber(value: unknown) {

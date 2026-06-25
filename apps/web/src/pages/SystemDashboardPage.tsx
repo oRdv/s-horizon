@@ -18,6 +18,7 @@ import {
 import { Link, useNavigate } from 'react-router-dom'
 
 import { AppShell } from '@/components/AppShell'
+import { TrackerDownloadGuide } from '@/components/booster/TrackerDownloadGuide'
 import { getApiErrorMessage } from '@/services/api/errors'
 import { authService } from '@/services/auth'
 import { systemService, type LandingBoosterPayload, type RoleDashboard } from '@/services/system'
@@ -71,6 +72,8 @@ const landingBoosterRanks: Array<{ key: LandingBooster['rank_key']; label: strin
   { key: 'grandmaster', label: 'Grão-Mestre' },
   { key: 'challenger', label: 'Desafiante' },
 ]
+
+const DASHBOARD_REFRESH_MS = 15_000
 
 interface LandingBoosterFormState {
   user_id: string
@@ -305,12 +308,14 @@ export function SystemDashboardPage() {
   useEffect(() => {
     let active = true
 
-    async function loadDashboard() {
+    async function loadDashboard(silent = false) {
       if (!user) {
         return
       }
 
-      setIsLoading(true)
+      if (!silent) {
+        setIsLoading(true)
+      }
 
       try {
         const payload = await systemService.getDashboard(user.role)
@@ -335,9 +340,13 @@ export function SystemDashboardPage() {
     }
 
     void loadDashboard()
+    const intervalId = window.setInterval(() => {
+      void loadDashboard(true)
+    }, DASHBOARD_REFRESH_MS)
 
     return () => {
       active = false
+      window.clearInterval(intervalId)
     }
   }, [clearSession, navigate, user])
 
@@ -848,6 +857,7 @@ function BoosterDashboardView({ dashboard }: { dashboard: BoosterDashboard }) {
   const addToast = useToastStore((state) => state.addToast)
   const [availableOrders, setAvailableOrders] = useState(dashboard.available_orders)
   const [claimingOrderId, setClaimingOrderId] = useState<number | null>(null)
+  const [isTrackerGuideOpen, setIsTrackerGuideOpen] = useState(false)
 
   async function handleClaimOrder(orderId: number) {
     setClaimingOrderId(orderId)
@@ -882,10 +892,14 @@ function BoosterDashboardView({ dashboard }: { dashboard: BoosterDashboard }) {
           <p>Escolha um pedido pago, assuma o serviço e acompanhe tudo em Meus serviços.</p>
         </div>
         <div className="booster-queue-panel__actions">
-          <a className="primary-button primary-button--crimson" href="/downloads/horizon-boost-tracker-windows.zip" download>
+          <button
+            className="primary-button primary-button--crimson"
+            onClick={() => setIsTrackerGuideOpen(true)}
+            type="button"
+          >
             <Download size={16} />
-            Baixar app PC
-          </a>
+            Baixar App
+          </button>
           <Link className="ghost-button" to="/booster/orders">
             Meus serviços
             <ArrowRight size={16} />
@@ -962,6 +976,11 @@ function BoosterDashboardView({ dashboard }: { dashboard: BoosterDashboard }) {
           <p>Assim que um pedido pago entrar na fila, ele aparece aqui para você pegar.</p>
         </div>
       )}
+      <TrackerDownloadGuide
+        assignedOrders={dashboard.assigned_orders}
+        isOpen={isTrackerGuideOpen}
+        onClose={() => setIsTrackerGuideOpen(false)}
+      />
     </article>
   )
 }

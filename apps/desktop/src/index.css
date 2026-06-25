@@ -511,6 +511,133 @@ button {
   background: rgba(255, 255, 255, 0.035);
 }
 
+.tracker-alert {
+  border: 1px solid rgba(255, 185, 94, 0.44);
+  border-radius: 18px;
+  padding: 12px 14px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #ffe7bd;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.activity-panel {
+  margin-top: 18px;
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.update-panel {
+  margin-top: 18px;
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(56, 189, 248, 0.24);
+  border-radius: 22px;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.09), rgba(255, 255, 255, 0.03));
+}
+
+.update-panel__header,
+.update-panel__actions {
+  display: flex;
+  align-items: center;
+}
+
+.update-panel__header {
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.update-panel__header span,
+.update-panel__meta,
+.update-panel__error {
+  color: var(--muted);
+}
+
+.update-panel__header strong {
+  display: block;
+  margin-top: 4px;
+}
+
+.update-panel__header svg {
+  color: #38bdf8;
+}
+
+.update-panel__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 0.86rem;
+}
+
+.update-panel__progress {
+  height: 10px;
+}
+
+.update-panel__error {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #ffe0ab;
+  font-size: 0.88rem;
+}
+
+.update-panel__actions {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.update-panel__actions .primary-button,
+.update-panel__actions .ghost-button {
+  min-height: 42px;
+  border-radius: 15px;
+  padding-inline: 14px;
+}
+
+.activity-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.activity-panel__header span,
+.activity-panel p,
+.activity-panel li {
+  color: var(--muted);
+}
+
+.activity-panel__header strong {
+  display: grid;
+  place-items: center;
+  min-width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: #fff;
+  font-size: 0.85rem;
+}
+
+.activity-panel ul {
+  display: grid;
+  gap: 8px;
+  max-height: 190px;
+  overflow: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activity-panel li {
+  overflow-wrap: anywhere;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+  font-size: 0.86rem;
+}
+
 .login-card {
   width: min(460px, calc(100vw - 36px));
   border-radius: 30px;
@@ -536,6 +663,30 @@ button {
 
 .login-form {
   gap: 14px;
+}
+
+.advanced-settings {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.advanced-settings summary {
+  color: #fff;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.advanced-settings .field {
+  margin-top: 12px;
+}
+
+.advanced-settings small {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  line-height: 1.45;
 }
 
 .field span {

@@ -23,10 +23,11 @@ export class LcuMonitor {
             };
         }
         try {
-            const [summoner, gameflow, champSelect] = await Promise.all([
+            const [summoner, gameflow, champSelect, rankedStats] = await Promise.all([
                 this.requestLcu(lockfile, '/lol-summoner/v1/current-summoner').catch(() => null),
                 this.requestLcu(lockfile, '/lol-gameflow/v1/session').catch(() => null),
                 this.requestLcu(lockfile, '/lol-champ-select/v1/session').catch(() => null),
+                this.requestLcu(lockfile, '/lol-ranked/v1/current-ranked-stats').catch(() => null),
             ]);
             const phase = readString(gameflow?.phase) ?? 'CLIENT_OPEN';
             const status = this.mapGameflowToStatus(phase);
@@ -45,7 +46,7 @@ export class LcuMonitor {
                     }
                     : null,
                 currentGame,
-                rankedProgress: null,
+                rankedProgress: this.extractRankedProgress(rankedStats),
                 recentMatches: [],
                 capturedAt,
                 error: null,
@@ -139,6 +140,25 @@ export class LcuMonitor {
         const myTeam = readRecordArray(champSelect?.myTeam) ?? [];
         const player = myTeam.find((item) => readNumber(item.cellId) === localPlayerCellId) ?? myTeam[0];
         return readNumber(player?.championId);
+    }
+    extractRankedProgress(rankedStats) {
+        const queues = rankedStats?.queues ?? rankedStats?.queueMap;
+        const queueList = Array.isArray(queues) ? queues.filter(isRecord) : null;
+        const queueMap = readRecord(queues);
+        const soloQueue = queueList
+            ? queueList.find((queue) => readString(queue.queueType) === 'RANKED_SOLO_5x5') ?? queueList[0]
+            : readRecord(queueMap?.RANKED_SOLO_5x5) ?? readRecord(queueMap?.RANKED_FLEX_SR);
+        if (!soloQueue) {
+            return null;
+        }
+        return {
+            tier: readString(soloQueue.tier),
+            division: readString(soloQueue.division ?? soloQueue.rank),
+            leaguePoints: readNumber(soloQueue.leaguePoints),
+            queueType: readString(soloQueue.queueType) ?? 'RANKED_SOLO_5x5',
+            wins: readNumber(soloQueue.wins),
+            losses: readNumber(soloQueue.losses),
+        };
     }
 }
 function readString(value) {

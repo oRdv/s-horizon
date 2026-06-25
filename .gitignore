@@ -44,3 +44,13 @@ tmp/
 .env
 .env.*
 apps/api/.env*
+!apps/api/.env.example
+!apps/api/.env.staging.example
+!apps/api/.env.production.example
+!apps/desktop/.env.example
+!apps/desktop/.env.staging.example
+!apps/desktop/.env.production.example
+!apps/web/.env.example
+!apps/web/.env.staging.example
+!apps/web/.env.production.example
+apps/desktop/dev-app-update.yml

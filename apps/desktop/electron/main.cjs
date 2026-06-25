@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain } = require('electron')
+const { autoUpdater } = require('electron-updater')
 const axios = require('axios')
 const https = require('node:https')
 const { access, mkdir, readFile, rm, writeFile } = require('node:fs/promises')
@@ -7,6 +8,10 @@ const path = require('node:path')
 let mainWindow = null
 
 const httpsAgent = new https.Agent({ rejectUnauthorized: false })
+if (process.env.HORIZON_TRACKER_USER_DATA_DIR) {
+  app.setPath('userData', process.env.HORIZON_TRACKER_USER_DATA_DIR)
+}
+
 const sessionFile = path.join(app.getPath('userData'), 'horizon-boost-session.json')
 
 let session = null
@@ -18,6 +23,7 @@ let currentState = {
   latestSnapshot: null,
   lastHeartbeatAt: null,
   lastError: null,
+  updates: initialUpdateState(),
 }
 
 app.whenReady().then(async () => {
@@ -28,6 +34,7 @@ app.whenReady().then(async () => {
   })
 
   registerIpcHandlers()
+  configureAutoUpdater()
   createWindow()
 
   app.on('activate', () => {
@@ -77,7 +84,21 @@ function registerIpcHandlers() {
     const response = await axios.post(`${apiBaseUrl}/auth/login`, {
       email: payload.email,
       password: payload.password,
+      two_factor_code: payload.twoFactorCode || undefined,
     }, { headers: jsonHeaders(), httpsAgent })
+
+    if (response.data.requires_two_factor) {
+      const devToken = response.data.data?.security?.dev_token
+      throw new Error(
+        devToken
+          ? `Codigo de 2FA enviado. Ambiente local: use ${devToken}.`
+          : response.data.message || 'Informe o codigo de 2FA enviado para seu email.',
+      )
+    }
+
+    if (!response.data.access_token || !response.data.data?.user) {
+      throw new Error('Resposta de login incompleta. Tente entrar novamente.')
+    }
 
     session = {
       apiBaseUrl,
@@ -150,6 +171,194 @@ function registerIpcHandlers() {
 
     return currentState
   })
+
+  ipcMain.handle('horizon-boost:updates/check', async () => {
+    assertUpdaterAvailable()
+
+    try {
+      updateState({
+        updates: {
+          ...currentState.updates,
+          status: 'checking',
+          error: null,
+          lastCheckedAt: new Date().toISOString(),
+        },
+      })
+
+      await autoUpdater.checkForUpdates()
+
+      return currentState.updates
+    } catch (error) {
+      const message = normalizeUpdaterError(error)
+      updateState({
+        updates: {
+          ...currentState.updates,
+          status: 'error',
+          error: message,
+        },
+      })
+      throw new Error(message)
+    }
+  })
+
+  ipcMain.handle('horizon-boost:updates/download', async () => {
+    assertUpdaterAvailable()
+
+    try {
+      updateState({
+        updates: {
+          ...currentState.updates,
+          status: 'downloading',
+          error: null,
+        },
+      })
+
+      await autoUpdater.downloadUpdate()
+
+      return currentState.updates
+    } catch (error) {
+      const message = normalizeUpdaterError(error)
+      updateState({
+        updates: {
+          ...currentState.updates,
+          status: 'error',
+          error: message,
+        },
+      })
+      throw new Error(message)
+    }
+  })
+
+  ipcMain.handle('horizon-boost:updates/install', async () => {
+    assertUpdaterAvailable()
+
+    if (!currentState.updates.downloaded) {
+      throw new Error('Baixe a atualizacao antes de instalar.')
+    }
+
+    updateState({
+      updates: {
+        ...currentState.updates,
+        status: 'installing',
+        error: null,
+      },
+    })
+
+    setImmediate(() => autoUpdater.quitAndInstall(false, true))
+
+    return currentState.updates
+  })
+}
+
+function configureAutoUpdater() {
+  autoUpdater.autoDownload = false
+  autoUpdater.autoInstallOnAppQuit = false
+
+  if (!app.isPackaged && process.env.HORIZON_TRACKER_ALLOW_DEV_UPDATES === 'true') {
+    autoUpdater.forceDevUpdateConfig = true
+  }
+
+  const provider = process.env.HORIZON_TRACKER_UPDATE_PROVIDER
+  const genericUrl = process.env.HORIZON_TRACKER_UPDATE_FEED_URL
+
+  if (provider === 'generic' && genericUrl) {
+    autoUpdater.setFeedURL({ provider: 'generic', url: genericUrl })
+  } else if (provider === 'github') {
+    autoUpdater.setFeedURL({
+      provider: 'github',
+      owner: process.env.HORIZON_TRACKER_UPDATE_OWNER || 'oRdv',
+      repo: process.env.HORIZON_TRACKER_UPDATE_REPO || 's-horizon',
+    })
+  }
+
+  autoUpdater.on('checking-for-update', () => {
+    updateState({
+      updates: {
+        ...currentState.updates,
+        status: 'checking',
+        error: null,
+        lastCheckedAt: new Date().toISOString(),
+      },
+    })
+  })
+
+  autoUpdater.on('update-available', (info) => {
+    updateState({
+      updates: {
+        ...currentState.updates,
+        status: 'available',
+        availableVersion: info.version || null,
+        downloaded: false,
+        progress: null,
+        error: null,
+      },
+    })
+  })
+
+  autoUpdater.on('update-not-available', () => {
+    updateState({
+      updates: {
+        ...currentState.updates,
+        status: 'not-available',
+        availableVersion: null,
+        downloaded: false,
+        progress: null,
+        error: null,
+      },
+    })
+  })
+
+  autoUpdater.on('download-progress', (progress) => {
+    updateState({
+      updates: {
+        ...currentState.updates,
+        status: 'downloading',
+        progress: Number.isFinite(progress.percent) ? progress.percent : null,
+        error: null,
+      },
+    })
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    updateState({
+      updates: {
+        ...currentState.updates,
+        status: 'downloaded',
+        availableVersion: info.version || currentState.updates.availableVersion,
+        progress: 100,
+        downloaded: true,
+        error: null,
+      },
+    })
+  })
+
+  autoUpdater.on('error', (error) => {
+    updateState({
+      updates: {
+        ...currentState.updates,
+        status: 'error',
+        error: normalizeUpdaterError(error),
+      },
+    })
+  })
+}
+
+function initialUpdateState() {
+  return {
+    status: 'idle',
+    currentVersion: app.getVersion(),
+    availableVersion: null,
+    progress: null,
+    downloaded: false,
+    lastCheckedAt: null,
+    error: null,
+  }
+}
+
+function assertUpdaterAvailable() {
+  if (!app.isPackaged && process.env.HORIZON_TRACKER_ALLOW_DEV_UPDATES !== 'true') {
+    throw new Error('A verificacao de atualizacoes fica disponivel no aplicativo instalado.')
+  }
 }
 
 async function authorizedRequest(request) {
@@ -167,6 +376,10 @@ async function authorizedRequest(request) {
     const refresh = await axios.post(`${session.apiBaseUrl}/auth/refresh`, {
       refresh_token: session.refreshToken,
     }, { headers: jsonHeaders(), httpsAgent })
+
+    if (!refresh.data.access_token || !refresh.data.data?.user) {
+      throw new Error('Sessao nao renovada pelo backend.')
+    }
 
     session = {
       apiBaseUrl: session.apiBaseUrl,
@@ -368,6 +581,10 @@ function normalizeAxiosError(error) {
   }
 
   return error instanceof Error ? error : new Error('Falha inesperada.')
+}
+
+function normalizeUpdaterError(error) {
+  return error instanceof Error ? error.message : 'Nao foi possivel verificar atualizacoes.'
 }
 
 function readString(value) {

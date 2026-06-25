@@ -20,6 +20,7 @@ export interface BoosterProfile {
   accepts_initial_percentage?: boolean
   opgg_url?: string | null
   discord_username?: string | null
+  discord_user_id?: string | null
   diamond_plus_eta?: string | null
   accepts_cashflow_decay?: boolean
 }

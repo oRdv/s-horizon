@@ -16,6 +16,9 @@ declare global {
       lcuSnapshot: () => Promise<LcuSnapshot>
       heartbeat: (payload: HeartbeatPayload) => Promise<MonitorState>
       matchFinished: (payload: Record<string, unknown>) => Promise<MonitorState>
+      checkForUpdates: () => Promise<MonitorState['updates']>
+      downloadUpdate: () => Promise<MonitorState['updates']>
+      installUpdate: () => Promise<MonitorState['updates']>
       onStateChange: (callback: (state: MonitorState) => void) => () => void
     }
   }

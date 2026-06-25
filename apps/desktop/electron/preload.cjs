@@ -8,6 +8,9 @@ contextBridge.exposeInMainWorld('horizonBoostDesktop', {
   lcuSnapshot: () => ipcRenderer.invoke('horizon-boost:lcu-snapshot'),
   heartbeat: (payload) => ipcRenderer.invoke('horizon-boost:heartbeat', payload),
   matchFinished: (payload) => ipcRenderer.invoke('horizon-boost:match-finished', payload),
+  checkForUpdates: () => ipcRenderer.invoke('horizon-boost:updates/check'),
+  downloadUpdate: () => ipcRenderer.invoke('horizon-boost:updates/download'),
+  installUpdate: () => ipcRenderer.invoke('horizon-boost:updates/install'),
   onStateChange: (callback) => {
     const listener = (_event, state) => callback(state)
 

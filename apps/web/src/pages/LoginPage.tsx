@@ -1,7 +1,7 @@
 import type { FormEvent } from 'react'
 import { useState } from 'react'
 import { ArrowRight } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { BrandIcon } from '@/components/BrandIcon'
 import { BrandMark } from '@/components/BrandMark'
@@ -12,6 +12,7 @@ import { useToastStore } from '@/store/useToastStore'
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const addToast = useToastStore((state) => state.addToast)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -50,7 +51,7 @@ export function LoginPage() {
       })
       setRequiresTwoFactor(false)
       setTwoFactorCode('')
-      navigate(user.email_verified_at ? '/dashboard' : '/verify-email', { replace: true })
+      navigate(user.email_verified_at ? sanitizeInternalRedirect(searchParams.get('redirect')) ?? '/dashboard' : '/verify-email', { replace: true })
     } catch (error: unknown) {
       if (error instanceof TwoFactorRequiredError) {
         setRequiresTwoFactor(true)
@@ -166,4 +167,12 @@ export function LoginPage() {
       </div>
     </div>
   )
+}
+
+function sanitizeInternalRedirect(value: string | null): string | null {
+  if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('://')) {
+    return null
+  }
+
+  return value
 }
