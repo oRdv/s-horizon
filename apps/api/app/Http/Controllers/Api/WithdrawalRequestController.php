@@ -28,7 +28,7 @@ class WithdrawalRequestController extends Controller
             'reviewer:id,name,email,role',
         ]);
 
-        if (! $user->hasPermission('finance.withdrawals.manage')) {
+        if ($user->hasRole(UserRole::Booster) || ! $user->hasPermission('finance.withdrawals.manage')) {
             $query->where('booster_id', $user->getKey());
         }
 
@@ -133,6 +133,12 @@ class WithdrawalRequestController extends Controller
     {
         /** @var User $user */
         $user = $request->user();
+
+        if ($user->hasRole(UserRole::Booster)) {
+            return response()->json([
+                'message' => 'Boosters nao podem revisar solicitacoes de saque.',
+            ], 403);
+        }
 
         $validated = $request->validate([
             'status' => ['required', Rule::in([WithdrawalStatus::Approved->value, WithdrawalStatus::Rejected->value, WithdrawalStatus::Paid->value])],

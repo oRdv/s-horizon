@@ -103,10 +103,6 @@ function metadataNumber(value: unknown) {
   return Number.isFinite(numeric) ? numeric : 0
 }
 
-function getOrderGrossAmount(order: ServiceOrder) {
-  return Number(order.final_price ?? order.latest_payment?.finalAmount ?? order.latest_payment?.amount ?? order.price)
-}
-
 function emv(id: string, value: string) {
   return `${id}${String(value.length).padStart(2, '0')}${value}`
 }
@@ -174,16 +170,15 @@ export function FinancePage() {
   const [orders, setOrders] = useState<ServiceOrder[]>([])
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [requestingOrderId, setRequestingOrderId] = useState<number | null>(null)
-  const [withdrawalOrder, setWithdrawalOrder] = useState<ServiceOrder | null>(null)
+  const [isRequestingWithdrawal, setIsRequestingWithdrawal] = useState(false)
   const [reviewWithdrawal, setReviewWithdrawal] = useState<WithdrawalRequest | null>(null)
-  const [bonusAmount, setBonusAmount] = useState('')
   const [reviewBonusAmount, setReviewBonusAmount] = useState('')
-  const [generatedPix, setGeneratedPix] = useState<{ payload: string; dataUrl: string; amount: number } | null>(null)
   const [reviewPix, setReviewPix] = useState<{ payload: string; dataUrl: string; amount: number } | null>(null)
+  const isBoosterFinance = user?.role === 'booster'
   const canRequestWithdrawal = user?.role === 'booster' && hasPermission(user, 'finance.withdrawals.request')
-  const canManageWithdrawals = hasPermission(user, 'finance.withdrawals.manage')
+  const canManageWithdrawals = user?.role !== 'booster' && hasPermission(user, 'finance.withdrawals.manage')
   const canSeeWithdrawals = canRequestWithdrawal || canManageWithdrawals
+  const canSeePaymentHistory = !isBoosterFinance
 
   const financeSummary = useMemo(() => {
     const paidVolume = payments
@@ -211,7 +206,7 @@ export function FinancePage() {
 
   async function loadFinance() {
     const [nextPayments, nextWithdrawals, nextOrders] = await Promise.all([
-      systemService.getPayments(),
+      canSeePaymentHistory ? systemService.getPayments() : Promise.resolve([]),
       canSeeWithdrawals ? systemService.getWithdrawals() : Promise.resolve([]),
       canRequestWithdrawal ? systemService.getOrders() : Promise.resolve([]),
     ])
@@ -229,7 +224,7 @@ export function FinancePage() {
 
       try {
         const [nextPayments, nextWithdrawals, nextOrders] = await Promise.all([
-          systemService.getPayments(),
+          canSeePaymentHistory ? systemService.getPayments() : Promise.resolve([]),
           canSeeWithdrawals ? systemService.getWithdrawals() : Promise.resolve([]),
           canRequestWithdrawal ? systemService.getOrders() : Promise.resolve([]),
         ])
@@ -257,20 +252,14 @@ export function FinancePage() {
     return () => {
       active = false
     }
-  }, [addToast, canRequestWithdrawal, canSeeWithdrawals])
+  }, [addToast, canRequestWithdrawal, canSeePaymentHistory, canSeeWithdrawals])
 
   async function handleLogout() {
     await authService.logout()
     navigate('/login', { replace: true })
   }
 
-  function openWithdrawalModal(order: ServiceOrder) {
-    setWithdrawalOrder(order)
-    setBonusAmount('')
-    setGeneratedPix(null)
-  }
-
-  async function handleWithdrawal(order: ServiceOrder) {
+  async function handleRequestAvailableWithdrawals() {
     const pixKey = user?.booster_profile?.pix_key?.trim()
 
     if (!pixKey) {
@@ -282,30 +271,31 @@ export function FinancePage() {
       return
     }
 
-    setRequestingOrderId(order.id)
+    if (!financeSummary.withdrawableOrders.length) {
+      addToast({
+        tone: 'info',
+        title: 'Sem saldo liberado',
+        description: 'Finalize um boost antes de solicitar saque.',
+      })
+      return
+    }
+
+    setIsRequestingWithdrawal(true)
 
     try {
-      const bonus = Number(bonusAmount || 0)
-      const amount = getOrderWithdrawalAmount(order) + bonus
-      const payload = createPixPayload(pixKey, amount, `HB${order.id}`)
-      const dataUrl = await QRCode.toDataURL(payload, {
-        errorCorrectionLevel: 'M',
-        margin: 2,
-        width: 220,
-      })
-      await systemService.requestWithdrawal({
-        service_order_id: order.id,
-        method: 'pix',
-        pix_key: pixKey,
-        bonus_amount: bonus,
-        metadata: { pix_payload: payload },
-      })
+      for (const order of financeSummary.withdrawableOrders) {
+        await systemService.requestWithdrawal({
+          service_order_id: order.id,
+          method: 'pix',
+          pix_key: pixKey,
+        })
+      }
+
       await loadFinance()
-      setGeneratedPix({ payload, dataUrl, amount })
       addToast({
         tone: 'success',
-        title: 'QR Code gerado',
-        description: 'A solicitação foi criada com o valor final e a chave Pix do cadastro.',
+        title: 'Saque solicitado',
+        description: 'A solicitacao foi enviada para analise do financeiro.',
       })
     } catch (error: unknown) {
       addToast({
@@ -314,7 +304,7 @@ export function FinancePage() {
         description: getApiErrorMessage(error, 'Tente novamente em alguns instantes.'),
       })
     } finally {
-      setRequestingOrderId(null)
+      setIsRequestingWithdrawal(false)
     }
   }
 
@@ -384,7 +374,7 @@ export function FinancePage() {
         <section className="finance-hero panel">
           <div className="finance-hero__copy">
             <span className="panel__eyebrow">Financeiro</span>
-            <h1>Saques dos boosts</h1>
+            <h1>{isBoosterFinance ? 'Saldo e saques' : 'Saques dos boosts'}</h1>
             <p>Finalize um serviço, libere o boost para saque e acompanhe cada solicitação por pedido.</p>
           </div>
 
@@ -395,6 +385,7 @@ export function FinancePage() {
           </div>
         </section>
 
+        {!isBoosterFinance ? (
         <section className="finance-metric-grid">
           <SummaryMetric
             helper="Boosts finalizados sem saque"
@@ -411,6 +402,7 @@ export function FinancePage() {
           <SummaryMetric helper="Pagamentos registrados" icon={ReceiptText} label="Transações" value={payments.length} />
           <SummaryMetric helper="Histórico aprovado" icon={Wallet} label="Volume pago" value={formatCurrency(financeSummary.paidVolume)} />
         </section>
+        ) : null}
 
         <section className={`finance-primary-layout${canRequestWithdrawal ? '' : ' finance-primary-layout--single'}`}>
           {canRequestWithdrawal ? (
@@ -418,7 +410,7 @@ export function FinancePage() {
               <div className="finance-panel__header">
                 <div>
                   <span className="panel__eyebrow">Pronto para saque</span>
-                  <h2>Boosts finalizados</h2>
+                  <h2>Saldo disponivel</h2>
                 </div>
                 <Banknote size={22} />
               </div>
@@ -430,27 +422,25 @@ export function FinancePage() {
                 </div>
               ) : financeSummary.withdrawableOrders.length ? (
                 <div className="finance-withdrawable-grid">
-                  {financeSummary.withdrawableOrders.map((order) => (
-                    <article className="finance-withdrawable-card" key={order.id}>
-                      <div>
-                        <span>Pedido #{order.id}</span>
-                        <strong>{order.title}</strong>
-                        <small>Finalizado em {formatDate(order.completed_at ?? order.updated_at)}</small>
-                      </div>
-                      <div className="finance-withdrawable-card__action">
-                        <strong>{formatCurrency(getOrderWithdrawalAmount(order))}</strong>
-                        <button
-                          className="primary-button primary-button--crimson"
-                          disabled={requestingOrderId === order.id}
-                          onClick={() => openWithdrawalModal(order)}
-                          type="button"
-                        >
-                          Solicitar saque
-                          <ArrowUpRight size={16} />
-                        </button>
-                      </div>
-                    </article>
-                  ))}
+                  <article className="finance-withdrawable-card">
+                    <div>
+                      <span>{financeSummary.withdrawableOrders.length} boost(s) finalizado(s)</span>
+                      <strong>Saldo disponivel para retirada</strong>
+                      <small>O financeiro revisa a solicitacao antes do pagamento.</small>
+                    </div>
+                    <div className="finance-withdrawable-card__action">
+                      <strong>{formatCurrency(financeSummary.withdrawableVolume)}</strong>
+                      <button
+                        className="primary-button primary-button--crimson"
+                        disabled={isRequestingWithdrawal}
+                        onClick={() => void handleRequestAvailableWithdrawals()}
+                        type="button"
+                      >
+                        {isRequestingWithdrawal ? 'Solicitando...' : 'Solicitar saque'}
+                        <ArrowUpRight size={16} />
+                      </button>
+                    </div>
+                  </article>
                 </div>
               ) : (
                 <div className="finance-empty-state">
@@ -515,6 +505,7 @@ export function FinancePage() {
           ) : null}
         </section>
 
+        {!isBoosterFinance ? (
         <section className="finance-panel panel finance-history-panel">
           <div className="finance-panel__header">
             <div>
@@ -557,86 +548,6 @@ export function FinancePage() {
             </div>
           )}
         </section>
-
-        {withdrawalOrder ? (
-          <div className="modal-backdrop" onMouseDown={() => setWithdrawalOrder(null)}>
-            <section className="finance-withdrawal-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true">
-              <button
-                aria-label="Fechar"
-                className="confirm-modal__close"
-                onClick={() => setWithdrawalOrder(null)}
-                type="button"
-              >
-                <X size={18} />
-              </button>
-
-              <div className="finance-panel__header">
-                <div>
-                  <span className="panel__eyebrow">Solicitação Pix</span>
-                  <h2>{generatedPix ? 'QR Code gerado' : 'Conferir valores'}</h2>
-                </div>
-                <QrCode size={22} />
-              </div>
-
-              <div className="finance-withdrawal-summary">
-                <div>
-                  <span>Valor total do boost</span>
-                  <strong>{formatCurrency(getOrderGrossAmount(withdrawalOrder))}</strong>
-                </div>
-                <div>
-                  <span>Valor do booster</span>
-                  <strong>{formatCurrency(getOrderWithdrawalAmount(withdrawalOrder))}</strong>
-                </div>
-                <div>
-                  <span>Bônus adicional</span>
-                  <strong>{formatCurrency(Number(bonusAmount || 0))}</strong>
-                </div>
-                <div className="finance-withdrawal-summary__total">
-                  <span>Total do Pix</span>
-                  <strong>{formatCurrency(getOrderWithdrawalAmount(withdrawalOrder) + Number(bonusAmount || 0))}</strong>
-                </div>
-              </div>
-
-              <div className="finance-withdrawal-pix-key">
-                <span>Chave Pix do cadastro</span>
-                <strong>{user?.booster_profile?.pix_key || 'Chave Pix não cadastrada'}</strong>
-              </div>
-
-              {!generatedPix ? (
-                <>
-                  <label className="finance-withdrawal-bonus">
-                    <span>Adicionar valor extra para o booster</span>
-                    <input
-                      min="0"
-                      onChange={(event) => setBonusAmount(event.target.value)}
-                      placeholder="0,00"
-                      type="number"
-                      value={bonusAmount}
-                    />
-                  </label>
-
-                  <button
-                    className="primary-button primary-button--crimson"
-                    disabled={requestingOrderId === withdrawalOrder.id || !user?.booster_profile?.pix_key}
-                    onClick={() => void handleWithdrawal(withdrawalOrder)}
-                    type="button"
-                  >
-                    {requestingOrderId === withdrawalOrder.id ? 'Gerando...' : 'Gerar QR Code Pix'}
-                    <ArrowUpRight size={16} />
-                  </button>
-                </>
-              ) : (
-                <div className="finance-withdrawal-qr">
-                  <img alt="QR Code Pix do saque" src={generatedPix.dataUrl} />
-                  <textarea readOnly rows={4} value={generatedPix.payload} />
-                  <button className="ghost-button" onClick={() => void handleCopyPix(generatedPix.payload)} type="button">
-                    <Copy size={16} />
-                    Copiar Pix
-                  </button>
-                </div>
-              )}
-            </section>
-          </div>
         ) : null}
 
         {reviewWithdrawal ? (

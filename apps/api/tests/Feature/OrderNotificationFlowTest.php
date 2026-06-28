@@ -122,7 +122,7 @@ class OrderNotificationFlowTest extends TestCase
                 && ($fields['Rota'] ?? null) === 'Prata II -> Ouro IV'
                 && ($fields['Regiao'] ?? null) === 'BR'
                 && str_contains((string) ($fields['Valor total'] ?? ''), '149,90')
-                && str_contains((string) ($fields['Valor booster'] ?? ''), '104,93')
+                && str_contains((string) ($fields['Valor booster'] ?? ''), '89,94')
                 && str_contains((string) ($fields['Restricoes'] ?? ''), 'Chat offline')
                 && str_contains((string) ($fields['Restricoes'] ?? ''), 'Campeoes especificos: Ahri, Lux')
                 && str_contains((string) ($fields['Restricoes'] ?? ''), 'Horario disponivel: 19h-23h')
@@ -208,7 +208,7 @@ class OrderNotificationFlowTest extends TestCase
             return data_get($payload, 'embeds.0.title') === 'Novo pedido disponivel #1'
                 && ($fields['Rota'] ?? null) === 'Bronze II -> Prata IV'
                 && ($fields['Restricoes'] ?? null) === 'Nenhuma informada'
-                && str_contains((string) ($fields['Valor booster'] ?? ''), '70,00')
+                && str_contains((string) ($fields['Valor booster'] ?? ''), '60,00')
                 && count(data_get($payload, 'components.0.components', [])) === 1
                 && data_get($payload, 'components.0.components.0.label') === 'Aceitar pedido';
         });

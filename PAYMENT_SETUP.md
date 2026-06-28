@@ -14,7 +14,9 @@ Backend:
 ```env
 STRIPE_SECRET_KEY=
 STRIPE_PUBLIC_KEY=
+STRIPE_RESTRICTED_KEY=
 STRIPE_WEBHOOK_SECRET=
+STRIPE_REQUIRE_LIVE=true
 
 MERCADO_PAGO_PUBLIC_KEY=
 MERCADO_PAGO_ACCESS_TOKEN=
@@ -41,6 +43,8 @@ VITE_API_URL=https://api.seu-dominio.com/api
 Em desenvolvimento local, `VITE_API_URL` pode ficar ausente porque o Vite usa proxy para `/api`.
 
 `STRIPE_WEBHOOK_SECRET` precisa ser o segredo do endpoint de webhook, com prefixo `whsec_`. Nao use `sk_test_` aqui.
+
+Em producao, use `sk_live_` no `STRIPE_SECRET_KEY` e `pk_live_` no `STRIPE_PUBLIC_KEY`. O backend valida se as duas chaves pertencem ao mesmo ambiente e bloqueia chaves test quando `STRIPE_REQUIRE_LIVE=true`. `STRIPE_RESTRICTED_KEY` pode guardar a chave `rk_live_` da conta, mas o fluxo atual de PaymentIntent usa `STRIPE_SECRET_KEY`.
 
 Em Windows local, `PAYMENT_CA_BUNDLE` pode apontar para `apps/api/storage/certs/cacert.pem` para evitar erro `cURL error 60` sem desligar validacao TLS.
 

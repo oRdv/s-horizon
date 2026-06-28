@@ -1,4 +1,4 @@
-const fallbackBoosterPayoutPercent = 70
+const fallbackBoosterPayoutPercent = 60
 
 function configuredBoosterPayoutPercent() {
   const rawValue = import.meta.env.VITE_BOOSTER_PAYOUT_PERCENT ?? String(fallbackBoosterPayoutPercent)

@@ -38,7 +38,9 @@ return [
     'stripe' => [
         'secret' => env('STRIPE_SECRET_KEY'),
         'public' => env('STRIPE_PUBLIC_KEY'),
+        'restricted' => env('STRIPE_RESTRICTED_KEY'),
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        'require_live' => env('STRIPE_REQUIRE_LIVE', env('PAYMENT_STRIPE_REQUIRE_LIVE', env('APP_ENV') === 'production')),
         'ca_bundle' => env('PAYMENT_CA_BUNDLE'),
     ],
 

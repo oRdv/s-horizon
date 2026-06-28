@@ -8,12 +8,12 @@ use App\Enums\UserRole;
 use App\Enums\WithdrawalStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Payment;
-use App\Models\PaymentTransaction;
 use App\Models\LandingBooster;
 use App\Models\BoosterTrackerSession;
 use App\Models\ServiceOrder;
 use App\Models\User;
 use App\Models\WithdrawalRequest;
+use App\Services\Orders\BoosterPayoutService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -152,15 +152,31 @@ class DashboardController extends Controller
         ]);
     }
 
-    public function booster(Request $request): JsonResponse
+    public function booster(Request $request, BoosterPayoutService $payouts): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
-        $availableEarnings = (float) PaymentTransaction::query()
-            ->where('user_id', $user->getKey())
-            ->whereIn('direction', ['booster_earning', 'booster_bonus'])
-            ->where('status', PaymentStatus::Paid->value)
-            ->sum('amount');
+        $blockedWithdrawalOrderIds = WithdrawalRequest::query()
+            ->where('booster_id', $user->getKey())
+            ->whereIn('status', [
+                WithdrawalStatus::Pending->value,
+                WithdrawalStatus::Approved->value,
+                WithdrawalStatus::Paid->value,
+            ])
+            ->get(['metadata'])
+            ->map(fn (WithdrawalRequest $withdrawal): int => (int) data_get($withdrawal->metadata ?? [], 'service_order_id'))
+            ->filter()
+            ->values()
+            ->all();
+        $withdrawableOrders = ServiceOrder::query()
+            ->where('booster_id', $user->getKey())
+            ->where('status', ServiceOrderStatus::Completed->value)
+            ->when($blockedWithdrawalOrderIds !== [], function ($query) use ($blockedWithdrawalOrderIds): void {
+                $query->whereNotIn('id', $blockedWithdrawalOrderIds);
+            })
+            ->get();
+        $availableEarnings = (float) $withdrawableOrders
+            ->sum(fn (ServiceOrder $order): float => $payouts->payoutAmount($order));
         $availableOrders = ServiceOrder::query()
             ->with(['customer:id,name,email,role'])
             ->whereNull('booster_id')

@@ -30,14 +30,20 @@ export class BackendReporter {
     }
     async login(payload) {
         const apiBaseUrl = normalizeApiBaseUrl(payload.apiBaseUrl);
-        const response = await axios.post(`${apiBaseUrl}/auth/login`, {
-            email: payload.email,
-            password: payload.password,
-            two_factor_code: payload.twoFactorCode || undefined,
-        }, {
-            headers: JSON_HEADERS,
-            httpsAgent,
-        });
+        let response;
+        try {
+            response = await axios.post(`${apiBaseUrl}/auth/login`, {
+                email: payload.email,
+                password: payload.password,
+                two_factor_code: payload.twoFactorCode || undefined,
+            }, {
+                headers: JSON_HEADERS,
+                httpsAgent,
+            });
+        }
+        catch (error) {
+            throw toLoginError(error);
+        }
         if (response.data.requires_two_factor) {
             const devToken = response.data.data?.security?.dev_token;
             throw new Error(devToken
@@ -136,11 +142,57 @@ function shouldAttemptRefresh(error) {
 }
 function toUserError(error) {
     if (axios.isAxiosError(error)) {
-        const message = typeof error.response?.data?.message === 'string'
-            ? error.response.data.message
-            : error.message;
+        if (!error.response) {
+            return new Error('Erro de conexao com o servidor.');
+        }
+        const message = safeApiMessage(error.response.data?.message, 'Nao foi possivel completar a acao.');
         return new Error(message);
     }
     return error instanceof Error ? error : new Error('Falha de comunicacao com o backend.');
+}
+function toLoginError(error) {
+    if (!axios.isAxiosError(error)) {
+        return error instanceof Error ? error : new Error('Erro de conexao com o servidor.');
+    }
+    if (!error.response) {
+        return new Error('Erro de conexao com o servidor.');
+    }
+    const status = error.response.status;
+    const apiMessage = safeApiMessage(error.response.data?.message, '');
+    const normalizedMessage = normalizeText(apiMessage);
+    const responseErrors = error.response.data?.errors;
+    const hasTwoFactorError = normalizedMessage.includes('2fa') ||
+        normalizedMessage.includes('codigo') ||
+        normalizedMessage.includes('two factor') ||
+        normalizedMessage.includes('two_factor') ||
+        hasFieldError(responseErrors, 'two_factor_code');
+    if (hasTwoFactorError) {
+        return new Error('Codigo 2FA invalido.');
+    }
+    if (status === 401 || status === 403) {
+        return new Error('Credenciais invalidas.');
+    }
+    if (status === 422) {
+        return new Error('Credenciais invalidas.');
+    }
+    if (status >= 500) {
+        return new Error('Erro de conexao com o servidor.');
+    }
+    return new Error(apiMessage || 'Nao foi possivel entrar agora. Tente novamente.');
+}
+function safeApiMessage(value, fallback) {
+    return typeof value === 'string' && value.trim() !== '' ? value.trim() : fallback;
+}
+function hasFieldError(value, field) {
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
+    return Object.prototype.hasOwnProperty.call(value, field);
+}
+function normalizeText(value) {
+    return value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
 }
 //# sourceMappingURL=backendReporter.js.map

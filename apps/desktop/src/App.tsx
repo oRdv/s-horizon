@@ -764,7 +764,59 @@ function updateLogMessage(updates: UpdateState) {
 }
 
 function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Falha inesperada.'
+  const rawMessage = error instanceof Error ? error.message : String(error ?? '')
+  const withoutIpcPrefix = rawMessage
+    .replace(/^Error invoking remote method '[^']+':\s*/i, '')
+    .replace(/^Error:\s*/i, '')
+    .trim()
+  const normalized = withoutIpcPrefix
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+
+  if (!withoutIpcPrefix) {
+    return 'Falha inesperada.'
+  }
+
+  const hasTwoFactorReference =
+    normalized.includes('2fa') ||
+    normalized.includes('two_factor') ||
+    normalized.includes('two factor') ||
+    normalized.includes('codigo')
+  const hasInvalidHint =
+    normalized.includes('invalido') ||
+    normalized.includes('invalid') ||
+    normalized.includes('incorreto') ||
+    normalized.includes('errado')
+
+  if (hasTwoFactorReference && hasInvalidHint) {
+    return 'Codigo 2FA invalido.'
+  }
+
+  if (
+    normalized.includes('credenciais') ||
+    normalized.includes('unauthorized') ||
+    normalized.includes('forbidden') ||
+    normalized.includes('status code 401') ||
+    normalized.includes('status code 403') ||
+    normalized.includes('status code 422')
+  ) {
+    return 'Credenciais invalidas.'
+  }
+
+  if (
+    normalized.includes('axioserror') ||
+    normalized.includes('horizon-boost:') ||
+    normalized.includes('request failed with status code') ||
+    normalized.includes('network error') ||
+    normalized.includes('econnrefused') ||
+    normalized.includes('enotfound') ||
+    normalized.includes('timeout')
+  ) {
+    return 'Erro de conexao com o servidor.'
+  }
+
+  return withoutIpcPrefix
 }
 
 export default App

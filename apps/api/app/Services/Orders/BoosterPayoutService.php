@@ -43,11 +43,11 @@ final class BoosterPayoutService
 
     private function basisPoints(): int
     {
-        $value = (string) config('payments.booster_payout_percent', '70');
+        $value = (string) config('payments.booster_payout_percent', '60');
         $normalized = str_replace(',', '.', trim($value));
 
         if ($normalized === '' || ! preg_match('/^\d+(\.\d{1,2})?$/', $normalized)) {
-            return 7000;
+            return 6000;
         }
 
         [$whole, $fraction] = array_pad(explode('.', $normalized, 2), 2, '');

@@ -15,11 +15,8 @@ final class StripePaymentProvider
     public function createPaymentIntent(Payment $payment): array
     {
         $secret = $this->secretKey();
-        $publishableKey = config('services.stripe.public');
-
-        if (! is_string($publishableKey) || trim($publishableKey) === '') {
-            throw new PaymentConfigurationException('Stripe nao configurado: defina STRIPE_PUBLIC_KEY no backend.');
-        }
+        $publishableKey = $this->publishableKey();
+        $this->assertMatchingKeyMode($secret, $publishableKey);
 
         $method = PaymentMethod::from($payment->method);
 
@@ -129,7 +126,75 @@ final class StripePaymentProvider
             throw new PaymentConfigurationException('Stripe nao configurado: defina STRIPE_SECRET_KEY no backend.');
         }
 
+        $secret = trim($secret);
+
+        if ($this->keyMode($secret, ['sk', 'rk']) === null) {
+            throw new PaymentConfigurationException('Stripe nao configurado: STRIPE_SECRET_KEY deve iniciar com sk_live_, sk_test_, rk_live_ ou rk_test_.');
+        }
+
+        if ($this->requiresLiveKeys() && $this->keyMode($secret, ['sk', 'rk']) !== 'live') {
+            throw new PaymentConfigurationException('Stripe em producao exige uma chave Live no backend.');
+        }
+
         return $secret;
+    }
+
+    private function publishableKey(): string
+    {
+        $publishableKey = config('services.stripe.public');
+
+        if (! is_string($publishableKey) || trim($publishableKey) === '') {
+            throw new PaymentConfigurationException('Stripe nao configurado: defina STRIPE_PUBLIC_KEY no backend.');
+        }
+
+        $publishableKey = trim($publishableKey);
+
+        if ($this->keyMode($publishableKey, ['pk']) === null) {
+            throw new PaymentConfigurationException('Stripe nao configurado: STRIPE_PUBLIC_KEY deve iniciar com pk_live_ ou pk_test_.');
+        }
+
+        return $publishableKey;
+    }
+
+    private function assertMatchingKeyMode(string $secret, string $publishableKey): void
+    {
+        $secretMode = $this->keyMode($secret, ['sk', 'rk']);
+        $publishableMode = $this->keyMode($publishableKey, ['pk']);
+
+        if ($secretMode !== $publishableMode) {
+            throw new PaymentConfigurationException('Stripe nao configurado: as chaves publica e secreta precisam ser do mesmo ambiente.');
+        }
+
+        if ($this->requiresLiveKeys() && $publishableMode !== 'live') {
+            throw new PaymentConfigurationException('Stripe em producao exige chave publica Live.');
+        }
+    }
+
+    /**
+     * @param array<int,string> $prefixes
+     */
+    private function keyMode(string $key, array $prefixes): ?string
+    {
+        foreach ($prefixes as $prefix) {
+            if (str_starts_with($key, $prefix.'_live_')) {
+                return 'live';
+            }
+
+            if (str_starts_with($key, $prefix.'_test_')) {
+                return 'test';
+            }
+        }
+
+        return null;
+    }
+
+    private function requiresLiveKeys(): bool
+    {
+        if (app()->environment('testing')) {
+            return false;
+        }
+
+        return filter_var(config('services.stripe.require_live'), FILTER_VALIDATE_BOOLEAN);
     }
 
     private function caBundle(): bool|string
