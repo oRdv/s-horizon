@@ -266,7 +266,7 @@ final class DiscordWebhookNotificationChannel implements NotificationChannel
 
     private function webhookUrlWithComponents(string $webhookUrl): string
     {
-        return $webhookUrl.(str_contains($webhookUrl, '?') ? '&' : '?').'with_components=true';
+        return $webhookUrl.(str_contains($webhookUrl, '?') ? '&' : '?').'wait=true&with_components=true';
     }
 
     private function backoffKey(string $webhookUrl): string

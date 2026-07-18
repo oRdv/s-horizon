@@ -130,6 +130,8 @@ class OrderNotificationFlowTest extends TestCase
             $encodedPayload = json_encode($payload) ?: '';
 
             return str_starts_with($request->url(), 'https://discord.test/orders')
+                && str_contains($request->url(), 'wait=true')
+                && str_contains($request->url(), 'with_components=true')
                 && data_get($payload, 'username') === 'Serviços'
                 && data_get($payload, 'avatar_url') === 'https://cdn.discord.test/server-icon.png'
                 && data_get($payload, 'content') === '<@&123456789>'
