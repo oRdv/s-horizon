@@ -258,7 +258,7 @@ export function BoosterOrderDetailPage() {
                     onClick={() => void handleClaim()}
                     type="button"
                   >
-                    {isClaiming ? 'Aceitando...' : 'Aceitar pedido'}
+                    {isClaiming ? 'Pegando...' : 'Pegar serviço'}
                   </button>
                 ) : null}
                 <button className="ghost-button" onClick={() => setIsTrackerGuideOpen(true)} type="button">

@@ -24,6 +24,22 @@ class OrderNotificationFlowTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Cache::flush();
+    }
+
+    public function test_plain_notification_email_view_can_be_rendered(): void
+    {
+        $rendered = view('emails.plain-notification', [
+            'bodyText' => 'Atualizacao privada do pedido.',
+        ])->render();
+
+        $this->assertStringContainsString('Atualizacao privada do pedido.', $rendered);
+    }
+
     public function test_paid_order_available_and_claimed_order_notifications_are_dispatched(): void
     {
         Mail::fake();
@@ -36,6 +52,8 @@ class OrderNotificationFlowTest extends TestCase
             'notifications.channels.email.enabled' => true,
             'notifications.channels.discord.enabled' => true,
             'notifications.channels.discord.webhook_url' => 'https://discord.test/orders',
+            'notifications.channels.discord.username' => 'Serviços',
+            'notifications.channels.discord.avatar_url' => 'https://cdn.discord.test/server-icon.png',
             'notifications.channels.discord.booster_role_id' => '123456789',
         ]);
 
@@ -112,6 +130,8 @@ class OrderNotificationFlowTest extends TestCase
             $encodedPayload = json_encode($payload) ?: '';
 
             return str_starts_with($request->url(), 'https://discord.test/orders')
+                && data_get($payload, 'username') === 'Serviços'
+                && data_get($payload, 'avatar_url') === 'https://cdn.discord.test/server-icon.png'
                 && data_get($payload, 'content') === '<@&123456789>'
                 && data_get($payload, 'embeds.0.title') === 'Novo pedido disponivel #1'
                 && data_get($payload, 'embeds.0.url') === 'https://app.horizonboost.test/booster/orders/1?source=discord'
@@ -133,7 +153,7 @@ class OrderNotificationFlowTest extends TestCase
                 && ! str_contains($encodedPayload, 'secret-password')
                 && ! str_contains($encodedPayload, 'game_account')
                 && count(data_get($payload, 'components.0.components', [])) === 1
-                && data_get($payload, 'components.0.components.0.label') === 'Aceitar pedido'
+                && data_get($payload, 'components.0.components.0.label') === 'Pegar serviço'
                 && $buttonUrl === 'https://app.horizonboost.test/booster/orders/1?source=discord&action=claim'
                 && ! str_contains($buttonUrl, 'token')
                 && ! str_contains($buttonUrl, 'jwt')
@@ -150,14 +170,18 @@ class OrderNotificationFlowTest extends TestCase
         Http::assertSent(function ($request): bool {
             $payload = $request->data();
 
-            return data_get($payload, 'embeds.0.title') === 'Booster One pegou o pedido #1'
-                && str_contains((string) data_get($payload, 'embeds.0.description'), 'Booster One pegou o pedido #1')
-                && data_get($payload, 'content') === '<@222222222222222222>'
-                && data_get($payload, 'allowed_mentions.users.0') === '222222222222222222'
-                && data_get($payload, 'embeds.0.url') === 'https://app.horizonboost.test/booster/orders/1?source=discord'
+            return data_get($payload, 'embeds.0.title') === 'Pedido #1 foi pego'
+                && data_get($payload, 'embeds.0.description') === 'Booster One pegou o pedido. Ele nao esta mais disponivel.'
+                && data_get($payload, 'content') === null
+                && data_get($payload, 'allowed_mentions.users') === []
+                && data_get($payload, 'embeds.0.url') === null
+                && data_get($payload, 'embeds.0.fields') === []
                 && data_get($payload, 'components') === null;
         });
 
+        app(OrderNotificationService::class)->available($order->refresh());
+
+        Http::assertSentCount(2);
         $this->assertSame(ServiceOrderStatus::BoosterAssigned->value, $order->refresh()->status);
         $this->assertSame($firstBooster->getKey(), $order->booster_id);
         $this->assertNotSame($secondBooster->getKey(), $order->booster_id);
@@ -200,6 +224,7 @@ class OrderNotificationFlowTest extends TestCase
         ]);
 
         app(OrderNotificationService::class)->available($order->refresh());
+        app(OrderNotificationService::class)->available($order->refresh());
 
         Http::assertSent(function ($request): bool {
             $payload = $request->data();
@@ -210,11 +235,12 @@ class OrderNotificationFlowTest extends TestCase
                 && ($fields['Restricoes'] ?? null) === 'Nenhuma informada'
                 && str_contains((string) ($fields['Valor booster'] ?? ''), '60,00')
                 && count(data_get($payload, 'components.0.components', [])) === 1
-                && data_get($payload, 'components.0.components.0.label') === 'Aceitar pedido';
+                && data_get($payload, 'components.0.components.0.label') === 'Pegar serviço';
         });
+        Http::assertSentCount(1);
     }
 
-    public function test_game_account_update_and_completed_order_notifications_are_dispatched(): void
+    public function test_game_account_update_and_completion_stay_out_of_discord_channel(): void
     {
         Mail::fake();
         Http::fake([
@@ -259,9 +285,7 @@ class OrderNotificationFlowTest extends TestCase
             return $mail->hasTo($booster->email)
                 && $mail->subjectLine === 'Dados de conta recebidos no pedido #1';
         });
-        Http::assertSent(function ($request): bool {
-            return data_get($request->data(), 'embeds.0.title') === 'Dados de conta recebidos no pedido #1';
-        });
+        Http::assertNothingSent();
 
         $this->withHeader('Authorization', 'Bearer '.$this->token($booster))
             ->postJson('/api/orders/'.$order->getKey().'/complete')
@@ -273,15 +297,11 @@ class OrderNotificationFlowTest extends TestCase
                 && ($mail->hasTo($customer->email) || $mail->hasTo($booster->email));
         });
         Mail::assertSentCount(3);
-        Http::assertSent(function ($request): bool {
-            return data_get($request->data(), 'embeds.0.title') === 'Pedido #1 finalizado'
-                && data_get($request->data(), 'embeds.0.url') === 'https://app.horizonboost.test/orders';
-        });
+        Http::assertNothingSent();
     }
 
     public function test_discord_notifications_respect_rate_limit_backoff(): void
     {
-        Cache::flush();
         Mail::fake();
         Http::fake([
             'https://discord.test/orders*' => Http::response(['retry_after' => 2], 429, [
@@ -369,6 +389,16 @@ class OrderNotificationFlowTest extends TestCase
 
         app(PaymentService::class)->markPaid($payment, ['id' => 'mp-idempotent-1']);
         app(PaymentService::class)->markPaid($payment->refresh(), ['id' => 'mp-idempotent-1']);
+
+        $secondPayment = $payment->replicate([
+            'provider_payment_id',
+            'paid_at',
+            'metadata',
+        ]);
+        $secondPayment->status = PaymentStatus::WaitingPayment->value;
+        $secondPayment->save();
+
+        app(PaymentService::class)->markPaid($secondPayment, ['id' => 'mp-idempotent-2']);
 
         Mail::assertSentCount(1);
         Http::assertSentCount(1);

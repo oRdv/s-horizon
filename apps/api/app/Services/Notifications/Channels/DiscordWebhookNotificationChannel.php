@@ -41,65 +41,101 @@ final class DiscordWebhookNotificationChannel implements NotificationChannel
             return;
         }
 
-        $roleId = config('notifications.channels.discord.booster_role_id');
-        $shouldMentionBoosters = (bool) ($message->context['mention_boosters'] ?? false) && filled($roleId);
-        $discordUserId = $message->context['discord_user_id'] ?? null;
-        $shouldMentionUser = ! $shouldMentionBoosters && is_string($discordUserId) && preg_match('/^\d{15,32}$/', $discordUserId) === 1;
+        $deliveryKey = $this->deliveryKey($message, $webhookUrl);
+        $deliveryLock = null;
 
-        $payload = [
-            'username' => (string) config('notifications.channels.discord.username', 'Horizon Boost'),
-            'avatar_url' => config('notifications.channels.discord.avatar_url'),
-            'content' => $this->mentionContent($shouldMentionBoosters, (string) $roleId, $shouldMentionUser, (string) $discordUserId),
-            'allowed_mentions' => [
-                'parse' => [],
-                'roles' => $shouldMentionBoosters ? [(string) $roleId] : [],
-                'users' => $shouldMentionUser ? [(string) $discordUserId] : [],
-            ],
-            'embeds' => [
-                [
-                    'title' => $message->title,
-                    'description' => $message->body,
-                    'url' => $message->actionUrl,
-                    'color' => $this->colorFor($message->key),
-                    'fields' => $this->fieldsFor($message),
-                    'timestamp' => now()->toIso8601String(),
-                    'footer' => ['text' => 'Horizon Boost'],
+        if ($deliveryKey !== null) {
+            $deliveryLock = Cache::lock($deliveryKey.'.lock', max(
+                10,
+                (int) config('notifications.channels.discord.timeout_seconds', 5) + 5,
+            ));
+
+            if (! $deliveryLock->get()) {
+                Log::info('notifications.discord_delivery_in_progress', [
+                    'key' => $message->key,
+                ]);
+
+                return;
+            }
+
+            if (Cache::has($deliveryKey)) {
+                $deliveryLock->release();
+
+                Log::info('notifications.discord_duplicate_skipped', [
+                    'key' => $message->key,
+                ]);
+
+                return;
+            }
+        }
+
+        try {
+            $roleId = config('notifications.channels.discord.booster_role_id');
+            $shouldMentionBoosters = (bool) ($message->context['mention_boosters'] ?? false) && filled($roleId);
+            $discordUserId = $message->context['discord_user_id'] ?? null;
+            $shouldMentionUser = ! $shouldMentionBoosters && is_string($discordUserId) && preg_match('/^\d{15,32}$/', $discordUserId) === 1;
+
+            $payload = [
+                'username' => (string) config('notifications.channels.discord.username', 'Serviços'),
+                'avatar_url' => config('notifications.channels.discord.avatar_url'),
+                'content' => $this->mentionContent($shouldMentionBoosters, (string) $roleId, $shouldMentionUser, (string) $discordUserId),
+                'allowed_mentions' => [
+                    'parse' => [],
+                    'roles' => $shouldMentionBoosters ? [(string) $roleId] : [],
+                    'users' => $shouldMentionUser ? [(string) $discordUserId] : [],
                 ],
-            ],
-            'components' => $this->componentsFor($message),
-        ];
+                'embeds' => [
+                    [
+                        'title' => $message->title,
+                        'description' => $message->body,
+                        'url' => $message->actionUrl,
+                        'color' => $this->colorFor($message->key),
+                        'fields' => $this->fieldsFor($message),
+                        'timestamp' => now()->toIso8601String(),
+                        'footer' => ['text' => 'Horizon Boost'],
+                    ],
+                ],
+                'components' => $this->componentsFor($message),
+            ];
 
-        $response = Http::timeout((int) config('notifications.channels.discord.timeout_seconds', 5))
-            ->acceptJson()
-            ->post($this->webhookUrlWithComponents($webhookUrl), array_filter($payload, static fn ($value): bool => $value !== null && $value !== []));
+            $response = Http::timeout((int) config('notifications.channels.discord.timeout_seconds', 5))
+                ->acceptJson()
+                ->post($this->webhookUrlWithComponents($webhookUrl), array_filter($payload, static fn ($value): bool => $value !== null && $value !== []));
 
-        if ($response->status() === 429) {
-            $retryAfterSeconds = $this->retryAfterSeconds($response);
-            Cache::put($backoffKey, now()->addSeconds($retryAfterSeconds)->timestamp, $retryAfterSeconds);
+            if ($response->status() === 429) {
+                $retryAfterSeconds = $this->retryAfterSeconds($response);
+                Cache::put($backoffKey, now()->addSeconds($retryAfterSeconds)->timestamp, $retryAfterSeconds);
 
-            Log::warning('notifications.discord_rate_limited', [
-                'retry_after' => $retryAfterSeconds,
-                'bucket' => $response->header('X-RateLimit-Bucket'),
-            ]);
+                Log::warning('notifications.discord_rate_limited', [
+                    'retry_after' => $retryAfterSeconds,
+                    'bucket' => $response->header('X-RateLimit-Bucket'),
+                ]);
 
-            return;
-        }
+                return;
+            }
 
-        if ($response->failed()) {
-            Log::warning('notifications.discord_failed', [
+            if ($response->failed()) {
+                Log::warning('notifications.discord_failed', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+
+                return;
+            }
+
+            if ($deliveryKey !== null) {
+                Cache::forever($deliveryKey, true);
+            }
+
+            Log::info('notifications.discord_sent', [
+                'key' => $message->key,
                 'status' => $response->status(),
-                'body' => $response->body(),
+                'mentioned_boosters' => $shouldMentionBoosters,
+                'mentioned_user' => $shouldMentionUser,
             ]);
-
-            return;
+        } finally {
+            $deliveryLock?->release();
         }
-
-        Log::info('notifications.discord_sent', [
-            'key' => $message->key,
-            'status' => $response->status(),
-            'mentioned_boosters' => $shouldMentionBoosters,
-            'mentioned_user' => $shouldMentionUser,
-        ]);
     }
 
     /**
@@ -170,7 +206,7 @@ final class DiscordWebhookNotificationChannel implements NotificationChannel
         if ($message->key === 'order.available') {
             $actions = array_values(array_filter(
                 $actions,
-                static fn ($action): bool => is_array($action) && ($action['label'] ?? null) === 'Aceitar pedido',
+                static fn ($action): bool => is_array($action) && ($action['label'] ?? null) === 'Pegar serviço',
             ));
         }
 
@@ -236,6 +272,19 @@ final class DiscordWebhookNotificationChannel implements NotificationChannel
     private function backoffKey(string $webhookUrl): string
     {
         return 'notifications.discord.backoff.'.sha1($webhookUrl);
+    }
+
+    private function deliveryKey(NotificationMessage $message, string $webhookUrl): ?string
+    {
+        $deduplicationKey = $message->context['discord_deduplication_key'] ?? null;
+
+        if (! is_string($deduplicationKey) || trim($deduplicationKey) === '') {
+            return null;
+        }
+
+        return 'notifications.discord.delivered.'.sha1(
+            $webhookUrl.'|'.$message->key.'|'.trim($deduplicationKey),
+        );
     }
 
     private function retryAfterSeconds(Response $response): int

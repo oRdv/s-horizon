@@ -2,6 +2,8 @@
 
 namespace App\Services\Notifications;
 
+use App\Enums\PaymentStatus;
+use App\Enums\ServiceOrderStatus;
 use App\Enums\UserRole;
 use App\Models\ServiceOrder;
 use App\Models\User;
@@ -19,6 +21,19 @@ final class OrderNotificationService
 
     public function available(ServiceOrder $order): void
     {
+        $order = $order->fresh() ?? $order;
+
+        if (
+            filled($order->booster_id)
+            || $order->payment_status !== PaymentStatus::Paid->value
+            || ! in_array($order->status, [
+                ServiceOrderStatus::Paid->value,
+                ServiceOrderStatus::WaitingBooster->value,
+            ], true)
+        ) {
+            return;
+        }
+
         if (filled(data_get($order->metadata ?? [], 'addons.favorite_booster'))) {
             return;
         }
@@ -68,27 +83,21 @@ final class OrderNotificationService
 
     public function claimed(ServiceOrder $order): void
     {
-        $order->loadMissing(['booster.boosterProfile', 'customer']);
+        $order->loadMissing('booster');
 
         if (! $order->booster) {
             return;
         }
 
         $boosterName = $order->booster->name ?: 'Booster';
-        $route = $this->routeLabel($order);
 
         $this->dispatcher->dispatch(
             new NotificationMessage(
                 key: 'order.claimed',
-                title: "{$boosterName} pegou o pedido #{$order->getKey()}",
-                body: "{$boosterName} pegou o pedido #{$order->getKey()} — {$route}. O pedido nao esta mais disponivel na fila.",
-                actionUrl: $this->frontendUrl('/booster/orders/'.$order->getKey().'?source=discord'),
+                title: "Pedido #{$order->getKey()} foi pego",
+                body: "{$boosterName} pegou o pedido. Ele nao esta mais disponivel.",
                 context: [
-                    'order_id' => $order->getKey(),
-                    'route' => $route,
-                    'customer' => $order->customer?->name,
-                    'booster' => $boosterName,
-                    'discord_user_id' => $order->booster?->boosterProfile?->discord_user_id,
+                    'discord_deduplication_key' => 'order:'.$order->getKey(),
                 ],
                 channels: ['discord'],
             ),
@@ -118,6 +127,7 @@ final class OrderNotificationService
                     'discord_user_id' => $order->booster?->boosterProfile?->discord_user_id,
                     'discord_actions' => $this->assignedOrderActions($order),
                 ],
+                channels: ['email'],
             ),
             [$order->booster],
         );
@@ -142,6 +152,7 @@ final class OrderNotificationService
                     'discord_user_id' => $order->booster?->boosterProfile?->discord_user_id,
                     'discord_actions' => $this->completedOrderActions($order),
                 ],
+                channels: ['email'],
             ),
             $recipients,
         );
@@ -211,6 +222,7 @@ final class OrderNotificationService
             'restrictions' => $this->restrictionsLabel($order),
             'status' => 'Disponivel para boosters',
             'mention_boosters' => true,
+            'discord_deduplication_key' => 'order:'.$order->getKey(),
             'discord_actions' => $this->availableOrderActions($order),
         ];
     }
@@ -401,7 +413,7 @@ final class OrderNotificationService
         $orderPath = '/booster/orders/'.$order->getKey();
 
         return [
-            ['label' => 'Aceitar pedido', 'url' => $this->frontendUrl($orderPath.'?source=discord&action=claim')],
+            ['label' => 'Pegar serviço', 'url' => $this->frontendUrl($orderPath.'?source=discord&action=claim')],
         ];
     }
 

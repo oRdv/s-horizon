@@ -139,13 +139,13 @@ A API possui um dispatcher central em `App\Services\Notifications` com canais de
 Eventos integrados:
 
 - pagamento confirmado e pedido livre: notifica boosters ativos por e-mail e Discord;
-- pedido atribuido: notifica o booster responsavel;
-- dados da conta do jogo atualizados: notifica o booster responsavel;
-- pedido finalizado: notifica cliente e booster.
+- pedido pego: notifica o booster por e-mail e publica uma confirmacao simples no Discord;
+- dados da conta do jogo atualizados: notifica o booster por e-mail;
+- pedido finalizado: notifica cliente e booster por e-mail.
 
-O Discord usa webhook de canal para alertas rapidos no estilo de fila/oportunidade. Para interacoes mais avancadas, como botoes para aceitar pedido dentro do Discord, a proxima etapa deve adicionar um bot com comandos/interactions e permissoes por cargo.
+O Discord usa webhook de canal para dois alertas por pedido: disponibilidade com o botao `Pegar serviço` e confirmacao de que o pedido foi pego. O aceite real acontece no site autenticado. Para interacoes executadas diretamente dentro do Discord, a proxima etapa deve adicionar um bot com comandos/interactions e permissoes por cargo.
 
-O canal Discord respeita respostas `429` usando `retry_after`/headers de rate limit e ativa backoff em cache para evitar flood no webhook.
+O canal Discord respeita respostas `429` usando `retry_after`/headers de rate limit, ativa backoff e registra cada aviso no cache para evitar duplicacao.
 
 Modelo recomendado para a proxima evolucao do Discord:
 

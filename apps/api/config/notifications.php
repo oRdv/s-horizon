@@ -11,7 +11,7 @@ return [
         'discord' => [
             'enabled' => (bool) env('DISCORD_NOTIFICATIONS_ENABLED', false),
             'webhook_url' => env('DISCORD_ORDERS_WEBHOOK_URL'),
-            'username' => env('DISCORD_NOTIFICATIONS_USERNAME', 'Horizon Boost'),
+            'username' => env('DISCORD_NOTIFICATIONS_USERNAME', 'Serviços'),
             'avatar_url' => env('DISCORD_NOTIFICATIONS_AVATAR_URL'),
             'booster_role_id' => env('DISCORD_BOOSTER_ROLE_ID'),
             'timeout_seconds' => (int) env('DISCORD_NOTIFICATIONS_TIMEOUT_SECONDS', 5),

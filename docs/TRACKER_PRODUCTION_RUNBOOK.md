@@ -168,8 +168,8 @@ Crie um canal de oportunidades em staging/producao e gere um webhook:
 ```env
 DISCORD_NOTIFICATIONS_ENABLED=true
 DISCORD_ORDERS_WEBHOOK_URL=https://discord.com/api/webhooks/<id>/<token>
-DISCORD_NOTIFICATIONS_USERNAME="Horizon Boost"
-DISCORD_NOTIFICATIONS_AVATAR_URL=
+DISCORD_NOTIFICATIONS_USERNAME="Serviços"
+DISCORD_NOTIFICATIONS_AVATAR_URL="https://cdn.discordapp.com/icons/1478058141433200680/213c5b5f64abacfa8dc1ec24676baf27.png?size=256"
 DISCORD_BOOSTER_ROLE_ID=<role-id>
 DISCORD_NOTIFICATIONS_TIMEOUT_SECONDS=5
 ```
@@ -187,7 +187,7 @@ O webhook envia embed com pedido, rota, valor, cliente e link para painel. Quand
 
 As mensagens de pedido disponivel usam um botao de link, nao interacao direta. O Discord apenas abre o site:
 
-- `Aceitar pedido`: `/booster/orders/{id}?source=discord&action=claim`
+- `Pegar serviço`: `/booster/orders/{id}?source=discord&action=claim`
 
 A acao real de aceite acontece no site, depois do login, chamando `POST /api/orders/{id}/claim`. A API valida:
 
@@ -200,9 +200,9 @@ A acao real de aceite acontece no site, depois do login, chamando `POST /api/ord
 - lock transacional com `lockForUpdate`;
 - auditoria `orders.claimed_by_booster`.
 
-O perfil do booster possui `discord_username` e `discord_user_id`. O `discord_user_id` permite mencionar o booster em notificacoes atribuidas/atualizadas dentro do canal. Isso nao envia DM.
+Depois que o aceite e confirmado no site, o backend envia uma unica mensagem simples informando que o pedido foi pego. Atualizacoes de conta e conclusao ficam no e-mail e no painel, sem poluir o canal de oportunidades.
 
-Depois que o aceite e confirmado no site, o backend envia uma nova mensagem no canal informando quem pegou o pedido. Se o booster tiver `discord_user_id`, a mensagem menciona o usuario; se nao tiver, usa o nome cadastrado no site.
+Os eventos `order.available` e `order.claimed` usam uma chave persistente no cache para impedir reenvio do mesmo aviso pelo mesmo webhook. Antes de anunciar disponibilidade, o backend tambem confirma que o pedido continua pago, sem booster e com status `PAID` ou `WAITING_BOOSTER`.
 
 ### Limite atual sem bot Discord
 
@@ -347,13 +347,14 @@ Rate limit:
 Eventos cobertos:
 
 - Pedido pago e livre: e-mail para boosters ativos e Discord no canal de oportunidades.
-- Pedido atribuido: e-mail/Discord para o booster responsavel.
-- Dados da conta atualizados: e-mail/Discord para o booster responsavel.
-- Pedido finalizado: e-mail/Discord para cliente e booster.
+- Pedido pego na fila: e-mail para o booster e um aviso simples no Discord.
+- Dados da conta atualizados: e-mail para o booster responsavel.
+- Pedido finalizado: e-mail para cliente e booster.
 
 Idempotencia:
 
-- `PaymentService::markPaid` retorna cedo quando pagamento ja esta `PAID`, evitando notificacao duplicada no mesmo pagamento.
+- `PaymentService::markPaid` usa lock transacional e so notifica quando o pedido muda para pago pela primeira vez.
+- O webhook registra os avisos `order.available` e `order.claimed` no cache e ignora repeticoes.
 
 ## Rollback
 

@@ -138,25 +138,41 @@ final class PaymentService
 
     public function markPaid(Payment $payment, array $providerData = []): Payment
     {
-        if ($payment->status === PaymentStatus::Paid->value) {
-            return $payment;
-        }
+        $shouldNotify = DB::transaction(function () use ($payment, $providerData): bool {
+            $lockedPayment = Payment::query()
+                ->with('serviceOrder')
+                ->lockForUpdate()
+                ->find($payment->getKey());
 
-        DB::transaction(function () use ($payment, $providerData): void {
-            $payment->forceFill([
+            if (! $lockedPayment || $lockedPayment->status === PaymentStatus::Paid->value) {
+                return false;
+            }
+
+            $order = $lockedPayment->serviceOrder;
+            $orderWasAlreadyPaid = $order?->payment_status === PaymentStatus::Paid->value;
+
+            $lockedPayment->forceFill([
                 'status' => PaymentStatus::Paid->value,
-                'paid_at' => $payment->paid_at ?? $this->paidAtFromProvider($providerData) ?? now(),
-                'metadata' => array_replace_recursive($payment->metadata ?? [], ['provider' => $providerData]),
+                'paid_at' => $lockedPayment->paid_at ?? $this->paidAtFromProvider($providerData) ?? now(),
+                'metadata' => array_replace_recursive($lockedPayment->metadata ?? [], ['provider' => $providerData]),
             ])->save();
 
-            $payment->serviceOrder?->forceFill([
-                'status' => $payment->serviceOrder?->booster_id
+            $order?->forceFill([
+                'status' => $order?->booster_id
                     ? ServiceOrderStatus::BoosterAssigned->value
                     : ServiceOrderStatus::WaitingBooster->value,
                 'payment_status' => PaymentStatus::Paid->value,
-                'final_price' => $payment->final_amount,
+                'final_price' => $lockedPayment->final_amount,
             ])->save();
+
+            return $order !== null && ! $orderWasAlreadyPaid;
         });
+
+        $payment = $payment->refresh()->load('serviceOrder');
+
+        if (! $shouldNotify) {
+            return $payment;
+        }
 
         if ($payment->serviceOrder?->booster_id) {
             app(OrderChatService::class)->ensureConversation($payment->serviceOrder->refresh());
