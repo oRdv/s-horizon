@@ -85,6 +85,7 @@ class OrderNotificationFlowTest extends TestCase
                 'region' => 'BR',
                 'addons' => [
                     'chat_offline' => true,
+                    'specific_routes' => ['Mid', 'Support'],
                     'specific_champions' => ['Ahri', 'Lux'],
                     'restricted_hours' => '19h-23h',
                     'priority_service' => true,
@@ -141,7 +142,10 @@ class OrderNotificationFlowTest extends TestCase
                 && ($fields['Servico'] ?? null) === 'Boost Solo - Divisao'
                 && ($fields['Jogo'] ?? null) === 'League of Legends'
                 && ($fields['Fila'] ?? null) === 'Solo/Duo'
-                && ($fields['Rota'] ?? null) === 'Prata II -> Ouro IV'
+                && ($fields['Elo atual'] ?? null) === 'Prata II'
+                && ($fields['Elo desejado'] ?? null) === 'Ouro IV'
+                && ($fields['Rotas preferidas'] ?? null) === 'Mid, Support'
+                && ! array_key_exists('Rota', $fields)
                 && ($fields['Regiao'] ?? null) === 'BR'
                 && str_contains((string) ($fields['Valor total'] ?? ''), '149,90')
                 && str_contains((string) ($fields['Valor booster'] ?? ''), '89,94')
@@ -233,7 +237,10 @@ class OrderNotificationFlowTest extends TestCase
             $fields = $this->discordFields($payload);
 
             return data_get($payload, 'embeds.0.title') === 'Novo pedido disponivel #1'
-                && ($fields['Rota'] ?? null) === 'Bronze II -> Prata IV'
+                && ($fields['Elo atual'] ?? null) === 'Bronze II'
+                && ($fields['Elo desejado'] ?? null) === 'Prata IV'
+                && ($fields['Rotas preferidas'] ?? null) === 'Sem preferencia'
+                && ! array_key_exists('Rota', $fields)
                 && ($fields['Restricoes'] ?? null) === 'Nenhuma informada'
                 && str_contains((string) ($fields['Valor booster'] ?? ''), '60,00')
                 && count(data_get($payload, 'components.0.components', [])) === 1

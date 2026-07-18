@@ -152,6 +152,7 @@ final class DiscordWebhookNotificationChannel implements NotificationChannel
             'queue' => 'Fila',
             'current_rank' => 'Elo atual',
             'desired_rank' => 'Elo desejado',
+            'preferred_routes' => 'Rotas preferidas',
             'region' => 'Regiao',
             'route' => 'Rota',
             'price' => 'Valor',

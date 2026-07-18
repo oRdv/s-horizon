@@ -42,7 +42,7 @@ final class OrderNotificationService
             new NotificationMessage(
                 key: 'order.available',
                 title: "Novo pedido disponivel #{$order->getKey()}",
-                body: 'Pedido pago disponivel para boosters. Confira rota, valor e restricoes antes de aceitar.',
+                body: 'Pedido pago disponivel para boosters. Confira elos, rotas preferidas, valor e restricoes antes de aceitar.',
                 actionUrl: $this->frontendUrl('/booster/orders/'.$order->getKey().'?source=discord'),
                 context: $this->availableOrderContext($order),
             ),
@@ -171,21 +171,14 @@ final class OrderNotificationService
 
     private function routeLabel(ServiceOrder $order): string
     {
-        $metadata = $order->metadata ?? [];
-        $current = $this->rankLabel(
-            data_get($metadata, 'current_rank') ?? data_get($metadata, 'currentRank'),
-            data_get($metadata, 'current_tier'),
-            data_get($metadata, 'current_division'),
-        );
-        $target = $this->rankLabel(
-            data_get($metadata, 'desired_rank') ?? data_get($metadata, 'desiredRank'),
-            data_get($metadata, 'target_tier'),
-            data_get($metadata, 'target_division'),
-        );
+        $current = $this->currentRankLabel($order);
+        $target = $this->desiredRankLabel($order);
 
         if (filled($current) && filled($target)) {
             return "{$current} -> {$target}";
         }
+
+        $metadata = $order->metadata ?? [];
 
         if (is_string(data_get($metadata, 'quote_summary')) && filled(data_get($metadata, 'quote_summary'))) {
             return (string) data_get($metadata, 'quote_summary');
@@ -215,7 +208,9 @@ final class OrderNotificationService
             'service' => $this->serviceLabel($order),
             'game' => $this->gameLabel($order),
             'queue' => $this->queueLabel($order),
-            'route' => $this->routeLabel($order),
+            'current_rank' => $this->currentRankLabel($order),
+            'desired_rank' => $this->desiredRankLabel($order),
+            'preferred_routes' => $this->preferredRoutesLabel($order),
             'region' => $this->regionLabel($order),
             'total_price' => $this->formatCents($totalCents),
             'booster_value' => $this->formatCents($this->payouts->payoutCents($order)),
@@ -313,6 +308,44 @@ final class OrderNotificationService
         return $tierLabel.' '.strtoupper(trim($division));
     }
 
+    private function currentRankLabel(ServiceOrder $order): ?string
+    {
+        $metadata = $order->metadata ?? [];
+
+        return $this->rankLabel(
+            data_get($metadata, 'current_rank') ?? data_get($metadata, 'currentRank'),
+            data_get($metadata, 'current_tier'),
+            data_get($metadata, 'current_division'),
+        );
+    }
+
+    private function desiredRankLabel(ServiceOrder $order): ?string
+    {
+        $metadata = $order->metadata ?? [];
+
+        return $this->rankLabel(
+            data_get($metadata, 'desired_rank') ?? data_get($metadata, 'desiredRank'),
+            data_get($metadata, 'target_tier'),
+            data_get($metadata, 'target_division'),
+        );
+    }
+
+    private function preferredRoutesLabel(ServiceOrder $order): string
+    {
+        $routes = data_get($order->metadata ?? [], 'addons.specific_routes');
+
+        if (! is_array($routes)) {
+            return 'Sem preferencia';
+        }
+
+        $routes = array_values(array_unique(array_filter(array_map(
+            static fn ($route): string => trim((string) $route),
+            $routes,
+        ))));
+
+        return $routes === [] ? 'Sem preferencia' : implode(', ', $routes);
+    }
+
     private function restrictionsLabel(ServiceOrder $order): string
     {
         $addons = data_get($order->metadata ?? [], 'addons');
@@ -334,8 +367,6 @@ final class OrderNotificationService
         if (is_string($addons['flash_position'] ?? null) && trim((string) $addons['flash_position']) !== '') {
             $restrictions[] = 'Flash no '.strtoupper(trim((string) $addons['flash_position']));
         }
-
-        $this->appendListRestriction($restrictions, 'Rotas especificas', $addons['specific_routes'] ?? null);
 
         if (($addons['priority_service'] ?? false) === true) {
             $restrictions[] = 'Servico prioritario';
