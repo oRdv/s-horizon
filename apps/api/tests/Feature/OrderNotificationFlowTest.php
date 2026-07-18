@@ -136,24 +136,24 @@ class OrderNotificationFlowTest extends TestCase
                 && data_get($payload, 'username') === 'Serviços'
                 && data_get($payload, 'avatar_url') === 'https://cdn.discord.test/server-icon.png'
                 && data_get($payload, 'content') === '<@&123456789>'
-                && data_get($payload, 'embeds.0.title') === 'Novo pedido disponivel #1'
+                && data_get($payload, 'embeds.0.title') === 'Novo pedido disponível #1'
                 && data_get($payload, 'embeds.0.url') === 'https://app.horizonboost.test/booster/orders/1?source=discord'
                 && ($fields['Pedido'] ?? null) === '#1'
-                && ($fields['Servico'] ?? null) === 'Boost Solo - Divisao'
+                && ($fields['Serviço'] ?? null) === 'Boost Solo - Divisão'
                 && ($fields['Jogo'] ?? null) === 'League of Legends'
                 && ($fields['Fila'] ?? null) === 'Solo/Duo'
                 && ($fields['Elo atual'] ?? null) === 'Prata II'
                 && ($fields['Elo desejado'] ?? null) === 'Ouro IV'
                 && ($fields['Rotas preferidas'] ?? null) === 'Mid, Support'
                 && ! array_key_exists('Rota', $fields)
-                && ($fields['Regiao'] ?? null) === 'BR'
+                && ($fields['Região'] ?? null) === 'BR'
                 && str_contains((string) ($fields['Valor total'] ?? ''), '149,90')
                 && str_contains((string) ($fields['Valor booster'] ?? ''), '89,94')
-                && str_contains((string) ($fields['Restricoes'] ?? ''), 'Chat offline')
-                && str_contains((string) ($fields['Restricoes'] ?? ''), 'Campeoes especificos: Ahri, Lux')
-                && str_contains((string) ($fields['Restricoes'] ?? ''), 'Horario disponivel: 19h-23h')
-                && str_contains((string) ($fields['Restricoes'] ?? ''), 'Servico prioritario')
-                && ($fields['Status'] ?? null) === 'Disponivel para boosters'
+                && str_contains((string) ($fields['Restrições'] ?? ''), 'Chat offline')
+                && str_contains((string) ($fields['Restrições'] ?? ''), 'Campeões específicos: Ahri, Lux')
+                && str_contains((string) ($fields['Restrições'] ?? ''), 'Horário disponível: 19h-23h')
+                && str_contains((string) ($fields['Restrições'] ?? ''), 'Serviço prioritário')
+                && ($fields['Status'] ?? null) === 'Disponível para boosters'
                 && ! array_key_exists('Cliente', $fields)
                 && ! str_contains($encodedPayload, 'conta-cliente@example.com')
                 && ! str_contains($encodedPayload, 'secret-password')
@@ -177,7 +177,7 @@ class OrderNotificationFlowTest extends TestCase
             $payload = $request->data();
 
             return data_get($payload, 'embeds.0.title') === 'Pedido #1 foi pego'
-                && data_get($payload, 'embeds.0.description') === 'Booster One pegou o pedido. Ele nao esta mais disponivel.'
+                && data_get($payload, 'embeds.0.description') === 'Booster One pegou o pedido. Ele não está mais disponível.'
                 && data_get($payload, 'content') === null
                 && data_get($payload, 'allowed_mentions.users') === []
                 && data_get($payload, 'embeds.0.url') === null
@@ -236,12 +236,12 @@ class OrderNotificationFlowTest extends TestCase
             $payload = $request->data();
             $fields = $this->discordFields($payload);
 
-            return data_get($payload, 'embeds.0.title') === 'Novo pedido disponivel #1'
+            return data_get($payload, 'embeds.0.title') === 'Novo pedido disponível #1'
                 && ($fields['Elo atual'] ?? null) === 'Bronze II'
                 && ($fields['Elo desejado'] ?? null) === 'Prata IV'
-                && ($fields['Rotas preferidas'] ?? null) === 'Sem preferencia'
+                && ($fields['Rotas preferidas'] ?? null) === 'Sem preferência'
                 && ! array_key_exists('Rota', $fields)
-                && ($fields['Restricoes'] ?? null) === 'Nenhuma informada'
+                && ($fields['Restrições'] ?? null) === 'Nenhuma informada'
                 && str_contains((string) ($fields['Valor booster'] ?? ''), '60,00')
                 && count(data_get($payload, 'components.0.components', [])) === 1
                 && data_get($payload, 'components.0.components.0.label') === 'Pegar serviço';

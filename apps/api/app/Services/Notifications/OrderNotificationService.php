@@ -41,8 +41,8 @@ final class OrderNotificationService
         $this->dispatcher->dispatch(
             new NotificationMessage(
                 key: 'order.available',
-                title: "Novo pedido disponivel #{$order->getKey()}",
-                body: 'Pedido pago disponivel para boosters. Confira elos, rotas preferidas, valor e restricoes antes de aceitar.',
+                title: "Novo pedido disponível #{$order->getKey()}",
+                body: 'Pedido pago disponível para boosters. Confira elos, rotas preferidas, valor e restrições antes de aceitar.',
                 actionUrl: $this->frontendUrl('/booster/orders/'.$order->getKey().'?source=discord'),
                 context: $this->availableOrderContext($order),
             ),
@@ -64,8 +64,8 @@ final class OrderNotificationService
         $this->dispatcher->dispatch(
             new NotificationMessage(
                 key: 'order.assigned',
-                title: "Pedido #{$order->getKey()} atribuido a voce",
-                body: 'O pedido foi atribuido a sua conta. Abra Meus servicos, confirme os dados do cliente e inicie o Tracker antes da partida.',
+                title: "Pedido #{$order->getKey()} atribuído a você",
+                body: 'O pedido foi atribuído à sua conta. Abra Meus serviços, confirme os dados do cliente e inicie o Tracker antes da partida.',
                 actionUrl: $this->frontendUrl('/booster/orders/'.$order->getKey().'?source=discord'),
                 context: [
                     'order_id' => $order->getKey(),
@@ -95,7 +95,7 @@ final class OrderNotificationService
             new NotificationMessage(
                 key: 'order.claimed',
                 title: "Pedido #{$order->getKey()} foi pego",
-                body: "{$boosterName} pegou o pedido. Ele nao esta mais disponivel.",
+                body: "{$boosterName} pegou o pedido. Ele não está mais disponível.",
                 context: [
                     'discord_deduplication_key' => 'order:'.$order->getKey(),
                 ],
@@ -117,7 +117,7 @@ final class OrderNotificationService
             new NotificationMessage(
                 key: 'order.game_account_updated',
                 title: "Dados de conta recebidos no pedido #{$order->getKey()}",
-                body: 'O cliente enviou ou atualizou os dados da conta do jogo. Confira no pedido antes de iniciar o servico.',
+                body: 'O cliente enviou ou atualizou os dados da conta do jogo. Confira no pedido antes de iniciar o serviço.',
                 actionUrl: $this->frontendUrl('/booster/orders/'.$order->getKey().'?source=discord'),
                 context: [
                     'order_id' => $order->getKey(),
@@ -142,7 +142,7 @@ final class OrderNotificationService
             new NotificationMessage(
                 key: 'order.completed',
                 title: "Pedido #{$order->getKey()} finalizado",
-                body: 'O pedido foi marcado como finalizado. O cliente ja pode revisar o resultado e o booster pode seguir o fluxo financeiro.',
+                body: 'O pedido foi marcado como finalizado. O cliente já pode revisar o resultado e o booster pode seguir o fluxo financeiro.',
                 actionUrl: $this->frontendUrl('/orders'),
                 context: [
                     'order_id' => $order->getKey(),
@@ -215,7 +215,7 @@ final class OrderNotificationService
             'total_price' => $this->formatCents($totalCents),
             'booster_value' => $this->formatCents($this->payouts->payoutCents($order)),
             'restrictions' => $this->restrictionsLabel($order),
-            'status' => 'Disponivel para boosters',
+            'status' => 'Disponível para boosters',
             'mention_boosters' => true,
             'discord_deduplication_key' => 'order:'.$order->getKey(),
             'discord_actions' => $this->availableOrderActions($order),
@@ -225,10 +225,10 @@ final class OrderNotificationService
     private function serviceLabel(ServiceOrder $order): string
     {
         return match ($order->service_type) {
-            'solo_boost_division' => 'Boost Solo - Divisao',
-            'duo_boost_division' => 'Boost Duo - Divisao',
-            'flex_boost_division' => 'Boost Flex - Divisao',
-            'wins_by_rank' => 'Vitorias por elo',
+            'solo_boost_division' => 'Boost Solo - Divisão',
+            'duo_boost_division' => 'Boost Duo - Divisão',
+            'flex_boost_division' => 'Boost Flex - Divisão',
+            'wins_by_rank' => 'Vitórias por elo',
             'md5_package' => 'MD5',
             'coaching_hour' => 'Coaching',
             default => $this->humanLabel($order->service_type ?: $order->title),
@@ -240,7 +240,7 @@ final class OrderNotificationService
         $game = data_get($order->metadata ?? [], 'game');
 
         if (! is_string($game) || trim($game) === '') {
-            return 'Nao informado';
+            return 'Não informado';
         }
 
         return match ($game) {
@@ -264,7 +264,7 @@ final class OrderNotificationService
             'flex_boost_division' => 'Flex',
             'md5_package' => 'MD5',
             'coaching_hour' => 'Coaching',
-            default => 'Nao informado',
+            default => 'Não informado',
         };
     }
 
@@ -273,7 +273,7 @@ final class OrderNotificationService
         $metadata = $order->metadata ?? [];
         $region = data_get($metadata, 'region') ?? data_get($metadata, 'server') ?? data_get($metadata, 'riot_region');
 
-        return is_string($region) && trim($region) !== '' ? strtoupper(trim($region)) : 'Nao informado';
+        return is_string($region) && trim($region) !== '' ? strtoupper(trim($region)) : 'Não informado';
     }
 
     private function rankLabel(mixed $explicitRank, mixed $tier, mixed $division): ?string
@@ -295,7 +295,7 @@ final class OrderNotificationService
             'emerald' => 'Esmeralda',
             'diamond' => 'Diamante',
             'master' => 'Mestre',
-            'grandmaster' => 'Grao-Mestre',
+            'grandmaster' => 'Grão-Mestre',
             'challenger' => 'Desafiante',
             'sovereign' => 'Soberano',
             default => $this->humanLabel($tier),
@@ -335,7 +335,7 @@ final class OrderNotificationService
         $routes = data_get($order->metadata ?? [], 'addons.specific_routes');
 
         if (! is_array($routes)) {
-            return 'Sem preferencia';
+            return 'Sem preferência';
         }
 
         $routes = array_values(array_unique(array_filter(array_map(
@@ -343,7 +343,7 @@ final class OrderNotificationService
             $routes,
         ))));
 
-        return $routes === [] ? 'Sem preferencia' : implode(', ', $routes);
+        return $routes === [] ? 'Sem preferência' : implode(', ', $routes);
     }
 
     private function restrictionsLabel(ServiceOrder $order): string
@@ -369,21 +369,21 @@ final class OrderNotificationService
         }
 
         if (($addons['priority_service'] ?? false) === true) {
-            $restrictions[] = 'Servico prioritario';
+            $restrictions[] = 'Serviço prioritário';
         }
 
         if (($addons['super_restriction'] ?? false) === true) {
-            $restrictions[] = 'Super restricao';
+            $restrictions[] = 'Super restrição';
         }
 
         if (($addons['extra_win'] ?? false) === true) {
-            $restrictions[] = 'Vitoria extra';
+            $restrictions[] = 'Vitória extra';
         }
 
-        $this->appendListRestriction($restrictions, 'Campeoes especificos', $addons['specific_champions'] ?? null);
+        $this->appendListRestriction($restrictions, 'Campeões específicos', $addons['specific_champions'] ?? null);
 
         if (is_string($addons['restricted_hours'] ?? null) && trim((string) $addons['restricted_hours']) !== '') {
-            $restrictions[] = 'Horario disponivel: '.trim((string) $addons['restricted_hours']);
+            $restrictions[] = 'Horário disponível: '.trim((string) $addons['restricted_hours']);
         }
 
         if (($addons['stream_online'] ?? false) === true) {

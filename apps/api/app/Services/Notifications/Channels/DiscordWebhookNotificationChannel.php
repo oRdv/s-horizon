@@ -147,22 +147,22 @@ final class DiscordWebhookNotificationChannel implements NotificationChannel
 
         foreach ([
             'order_id' => 'Pedido',
-            'service' => 'Servico',
+            'service' => 'Serviço',
             'game' => 'Jogo',
             'queue' => 'Fila',
             'current_rank' => 'Elo atual',
             'desired_rank' => 'Elo desejado',
             'preferred_routes' => 'Rotas preferidas',
-            'region' => 'Regiao',
+            'region' => 'Região',
             'route' => 'Rota',
             'price' => 'Valor',
             'total_price' => 'Valor total',
             'booster_value' => 'Valor booster',
-            'restrictions' => 'Restricoes',
+            'restrictions' => 'Restrições',
             'status' => 'Status',
             'customer' => 'Cliente',
             'booster' => 'Booster',
-            'observation' => 'Observacao',
+            'observation' => 'Observação',
         ] as $key => $label) {
             $value = $message->context[$key] ?? null;
             if (filled($value)) {
