@@ -8,6 +8,7 @@ import { BoosterApplicationPage } from '@/pages/BoosterApplicationPage'
 import { BoosterOrderDetailPage } from '@/pages/BoosterOrderDetailPage'
 import { BoosterOrdersPage } from '@/pages/BoosterOrdersPage'
 import { LandingPage } from '@/pages/LandingPage'
+import { LegalPage } from '@/pages/LegalPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { SignupPage } from '@/pages/SignupPage'
 import { EmailVerificationPage } from '@/pages/EmailVerificationPage'
@@ -92,6 +93,8 @@ function App() {
     <>
       <Routes>
         <Route element={<LandingPage />} path="/" />
+        <Route element={<LegalPage kind="privacy" />} path="/privacidade" />
+        <Route element={<LegalPage kind="terms" />} path="/termos-de-uso" />
         <Route element={user ? <Navigate replace to={getLoginRedirectPath()} /> : <LoginPage />} path="/login" />
         <Route element={user ? <Navigate replace to={getHomePath()} /> : <SignupPage />} path="/signup" />
         <Route element={user ? <Navigate replace to={getHomePath()} /> : <ForgotPasswordPage />} path="/forgot-password" />
