@@ -5,12 +5,13 @@ import { BrandIcon } from '@/components/BrandIcon'
 
 interface BrandMarkProps {
   compact?: boolean
+  label?: string
 }
 
-export function BrandMark({ compact = false }: BrandMarkProps) {
+export function BrandMark({ compact = false, label = 'Horizon Boost' }: BrandMarkProps) {
   return (
     <Link
-      aria-label="Ir para a página principal da Horizon Boost"
+      aria-label={`Ir para a página principal da ${label}`}
       className={clsx('brand-mark', compact && 'brand-mark--compact')}
       to="/"
     >
@@ -19,7 +20,7 @@ export function BrandMark({ compact = false }: BrandMarkProps) {
       </div>
 
       <div className="brand-mark__copy">
-        <strong>Horizon Boost</strong>
+        <strong>{label}</strong>
       </div>
     </Link>
   )

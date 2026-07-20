@@ -3,6 +3,7 @@ import { ChevronRight, ClipboardCheck, MessageCircle, ShieldCheck, Sparkles, Tro
 import { Link } from 'react-router-dom'
 
 import { BrandMark } from '@/components/BrandMark'
+import { PublicFooter } from '@/components/PublicFooter'
 import { getLolChampionOptions, type LolChampionOption } from '@/services/riot'
 import { systemService } from '@/services/system'
 import { useSessionStore } from '@/store/useSessionStore'
@@ -13,20 +14,21 @@ const discordUrl = 'https://discord.gg/cHPCH7BsrM'
 const services = [
   {
     icon: Trophy,
-    title: 'EloBoost',
-    description: 'Escolha sua rota e selecione seus campeões, nós jogamos para você',
+    title: 'Solo',
+    description:
+      'Escolha sua rota e seus campeões e evolua com rapidez e segurança, tendo opções de mentoria e acompanhamento.',
     bullets: ['rota principal', 'campeões preferidos', 'status no painel'],
   },
   {
     icon: Sparkles,
-    title: 'DuoBoost',
-    description: 'Você joga junto, aprende no caminho e combina os horários direto com quem vai te acompanhar.',
+    title: 'Duo',
+    description: 'Jogue com um profissional e aprenda a como ganhar mais partidas.',
     bullets: ['partidas em duo', 'horário combinado', 'contato direto'],
   },
   {
     icon: ClipboardCheck,
-    title: 'Vitórias e MD5',
-    description: 'Para quando falta pouco: garantir a MD5 ou aquelas vitórias pro elo desejado.',
+    title: 'MD5',
+    description: 'Garanta o melhor desempenho na sua MD5 para que seu MMR seja preservado!',
     bullets: ['pacotes fechados', 'pedido mais rápido', 'tudo registrado'],
   },
   {
@@ -102,7 +104,7 @@ export function LandingPage() {
 
       <header className="landing-header">
         <div className="landing-header__brand">
-          <BrandMark />
+          <BrandMark label="Horizon" />
         </div>
         <div className="landing-header__actions">
           <a className="discord-button discord-button--header" href={discordUrl} rel="noreferrer" target="_blank">
@@ -133,11 +135,10 @@ export function LandingPage() {
               <ShieldCheck size={16} />
               Alcance o elo que você merece.
             </span>
-            <h1 className="hero-title">Descubra o seu verdadeiro potencial
-Eloboost com rapidez e qualidade.</h1>
+            <h1 className="hero-title">Descubra o seu verdadeiro potencial com rapidez e qualidade.</h1>
             <p className="hero-subtitle">
-             Personalize sua experiência com eloboost de forma prática e intuitiva, acompanhando cada etapa pelo nosso dashboard e com suporte disponível 24 horas através do Discord.
-
+              Personalize sua experiência de forma prática e intuitiva, acompanhando cada etapa pelo nosso dashboard e
+              com suporte disponível 24 horas através do Discord.
             </p>
 
             <div className="hero-actions">
@@ -274,8 +275,8 @@ Eloboost com rapidez e qualidade.</h1>
         <section className="booster-recruit-section">
           <div className="booster-recruit-card">
             <div>
-              <span className="cta-section__eyebrow">SEJA BOOSTER</span>
-              <h2>Faça parte da equipe de boosters da Horizon.</h2>
+              <span className="cta-section__eyebrow">TRABALHE CONOSCO</span>
+              <h2>Faça parte da equipe Horizon.</h2>
               <p>
                 Envie sua inscrição para análise. Avaliamos disponibilidade, OP.GG, Discord e informações necessárias
                 antes da aprovação.
@@ -289,38 +290,14 @@ Eloboost com rapidez e qualidade.</h1>
             </div>
 
             <Link className="cta-button cta-button--primary booster-recruit-button" to="/booster/apply">
-              Quero ser booster
+              Quero fazer parte!
               <ChevronRight size={18} />
             </Link>
           </div>
         </section>
       </main>
 
-      <footer className="landing-footer">
-        <div className="footer-content">
-          <div className="footer-brand">
-            <BrandMark />
-            <p>© 2026 Horizon Boost. Todos os direitos reservados.</p>
-          </div>
-          <div className="footer-links">
-            {services.map((service) => (
-              <div className="footer-column" key={service.title}>
-                <h5>{service.title}</h5>
-                <ul>
-                  <li>
-                    <Link to={user ? '/purchases' : '/signup'}>Ver valores</Link>
-                  </li>
-                  <li>
-                    <a href={discordUrl} rel="noreferrer" target="_blank">
-                      Falar no Discord
-                    </a>
-                  </li>
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   )
 }

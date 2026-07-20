@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test:e2e": "node tests/e2e/mvp-smoke.mjs"
+    "test:e2e": "node tests/e2e/mvp-smoke.mjs",
+    "test:e2e:public": "node tests/e2e/public-pages-smoke.mjs"
   },
   "dependencies": {
     "@fontsource/space-grotesk": "^5.2.10",

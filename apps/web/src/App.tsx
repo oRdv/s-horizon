@@ -15,10 +15,12 @@ import { FinancePage } from '@/pages/FinancePage'
 import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage'
 import { OrdersPage } from '@/pages/OrdersPage'
 import { ProfilePage } from '@/pages/ProfilePage'
+import { PrivacyPage } from '@/pages/PrivacyPage'
 import { PurchasesPage } from '@/pages/PurchasesPage'
 import { PaymentResultPage } from '@/pages/PaymentResultPage'
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
 import { SystemDashboardPage } from '@/pages/SystemDashboardPage'
+import { TermsOfUsePage } from '@/pages/TermsOfUsePage'
 import { authService } from '@/services/auth'
 import { useSessionStore } from '@/store/useSessionStore'
 
@@ -92,6 +94,8 @@ function App() {
     <>
       <Routes>
         <Route element={<LandingPage />} path="/" />
+        <Route element={<PrivacyPage />} path="/privacidade" />
+        <Route element={<TermsOfUsePage />} path="/termos-de-uso" />
         <Route element={user ? <Navigate replace to={getLoginRedirectPath()} /> : <LoginPage />} path="/login" />
         <Route element={user ? <Navigate replace to={getHomePath()} /> : <SignupPage />} path="/signup" />
         <Route element={user ? <Navigate replace to={getHomePath()} /> : <ForgotPasswordPage />} path="/forgot-password" />

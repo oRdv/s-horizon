@@ -32,6 +32,8 @@ const viewports = [
 
 const routes = [
   '/',
+  '/privacidade',
+  '/termos-de-uso',
   '/login',
   '/signup',
   '/forgot-password',
@@ -45,6 +47,16 @@ const routes = [
   '/admin/users',
   '/payment/success?payment_id=1',
 ]
+const publicRoutes = new Set([
+  '/',
+  '/privacidade',
+  '/termos-de-uso',
+  '/login',
+  '/signup',
+  '/forgot-password',
+  '/reset-password',
+  '/booster/apply',
+])
 
 const browser = await chromium.launch({ executablePath, headless: true })
 const failures = []
@@ -134,7 +146,7 @@ try {
         failures.push(`${viewport.width}x${viewport.height} ${route}: horizontal overflow ${overflow}px`)
       }
 
-      const loginRedirectExpected = route !== '/' && route !== '/login' && route !== '/signup' && route !== '/forgot-password' && route !== '/reset-password' && route !== '/booster/apply'
+      const loginRedirectExpected = !publicRoutes.has(route)
       if (loginRedirectExpected && !page.url().includes('/login')) {
         failures.push(`${viewport.width}x${viewport.height} ${route}: protected route did not redirect to login`)
       }
