@@ -173,7 +173,7 @@ export function LandingPage() {
 
         <section className="boosters-section" aria-labelledby="boosters-title">
           <div className="section-heading">
-            <span>NOSSOS BOOSTERS</span>
+            <span>NOSSA EQUIPE</span>
             <h2 className="section-title" id="boosters-title">
               Nossa equipe é formada pelos melhores jogadores, com experiência e capacidade. Conheça nossos jogadores:
             </h2>
