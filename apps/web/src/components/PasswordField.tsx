@@ -2,12 +2,13 @@ import type { InputHTMLAttributes, KeyboardEvent, PointerEvent } from 'react'
 import { useRef, useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 
-type PasswordFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>
+type PasswordFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & {
+  isAdmin?: boolean
+}
 
-export function PasswordField({ disabled, ...props }: PasswordFieldProps) {
+export function PasswordField({ disabled, isAdmin, ...props }: PasswordFieldProps) {
   const [isVisible, setIsVisible] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  const ignoreNextClickRef = useRef(false)
   const Icon = isVisible ? EyeOff : Eye
 
   function handleToggle() {
@@ -17,18 +18,7 @@ export function PasswordField({ disabled, ...props }: PasswordFieldProps) {
     })
   }
 
-  function handlePointerToggle(event: PointerEvent<HTMLButtonElement>) {
-    event.preventDefault()
-    ignoreNextClickRef.current = true
-    handleToggle()
-  }
-
   function handleClickToggle() {
-    if (ignoreNextClickRef.current) {
-      ignoreNextClickRef.current = false
-      return
-    }
-
     handleToggle()
   }
 
@@ -42,7 +32,7 @@ export function PasswordField({ disabled, ...props }: PasswordFieldProps) {
   }
 
   return (
-    <div className="password-field">
+    <div className={`password-field ${isAdmin ? 'password-field--admin' : ''}`}>
       <input {...props} disabled={disabled} ref={inputRef} type={isVisible ? 'text' : 'password'} />
       <button
         aria-label={isVisible ? 'Ocultar senha' : 'Mostrar senha'}
@@ -51,7 +41,6 @@ export function PasswordField({ disabled, ...props }: PasswordFieldProps) {
         disabled={disabled}
         onClick={handleClickToggle}
         onKeyDown={handleKeyToggle}
-        onPointerDown={handlePointerToggle}
         type="button"
       >
         <Icon size={17} />

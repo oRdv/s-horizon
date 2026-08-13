@@ -248,7 +248,47 @@ export const priceTable: RankPriceRow[] = [
   },
 ]
 
-const rowByTier = Object.fromEntries(priceTable.map((row) => [row.tier, row])) as Record<RankTier, RankPriceRow>
+// Apply optional multipliers from environment to adjust prices without editing code.
+const emeraldMultiplier = Number((import.meta.env?.VITE_PRICE_MULTIPLIER_EMERALD ?? '1')) || 1
+
+function applyMultiplierToRange(range: PriceRange, multiplier: number): PriceRange {
+  return {
+    ...range,
+    min: Math.max(0, Math.round(range.min * multiplier)),
+    max: Math.max(0, Math.round(range.max * multiplier)),
+    plus: range.plus,
+  }
+}
+
+const adjustedPriceTable = priceTable.map((row) => {
+  if (row.tier !== 'emerald' || emeraldMultiplier === 1) {
+    return row
+  }
+
+  return {
+    ...row,
+    solo: applyMultiplierToRange(row.solo, emeraldMultiplier),
+    duo: applyMultiplierToRange(row.duo, emeraldMultiplier),
+    wins: applyMultiplierToRange(row.wins, emeraldMultiplier),
+    md5Package: applyMultiplierToRange(row.md5Package, emeraldMultiplier),
+    md5Equivalent: applyMultiplierToRange(row.md5Equivalent, emeraldMultiplier),
+    coaching: applyMultiplierToRange(row.coaching, emeraldMultiplier),
+  }
+})
+
+// Runtime-adjustable price table: can be replaced by admin-provided pricing
+let runtimeAdjustedPriceTable: RankPriceRow[] = adjustedPriceTable
+
+let rowByTier = Object.fromEntries(runtimeAdjustedPriceTable.map((row) => [row.tier, row])) as Record<RankTier, RankPriceRow>
+
+export function setRuntimePricingTable(rows?: RankPriceRow[]) {
+  runtimeAdjustedPriceTable = Array.isArray(rows) && rows.length ? rows : adjustedPriceTable
+  rowByTier = Object.fromEntries(runtimeAdjustedPriceTable.map((row) => [row.tier, row])) as Record<RankTier, RankPriceRow>
+}
+
+export function getRuntimePriceTable() {
+  return runtimeAdjustedPriceTable
+}
 
 const rankedProgression: ProgressionStep[] = [
   ...divisionalRankTiers.flatMap((tier) =>

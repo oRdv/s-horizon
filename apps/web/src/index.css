@@ -860,6 +860,18 @@ p {
     background 0.2s ease,
     color 0.2s ease,
     transform 0.2s ease;
+  /* z-index and pointer-events applied only for admin via wrapper */
+}
+
+/* Admin-only overrides: keep these minimal and scoped */
+.password-field--admin input {
+  position: relative;
+  z-index: 1;
+}
+
+.password-field--admin .password-field__toggle {
+  z-index: 2;
+  pointer-events: auto;
 }
 
 .password-field__toggle:hover:not(:disabled) {

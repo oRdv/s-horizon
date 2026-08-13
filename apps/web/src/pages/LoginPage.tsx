@@ -131,6 +131,7 @@ export function LoginPage() {
                   placeholder="Senha"
                   value={password}
                   className="simple-input"
+                  isAdmin={email.trim().toLowerCase() === 'boosthorizon@gmail.com'}
                 />
               </div>
 

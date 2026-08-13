@@ -282,6 +282,18 @@ export const systemService = {
     return response.data.data.boosters
   },
 
+  async getAdminPricing(): Promise<any> {
+    const response = await apiClient.get<DashboardResponse<{ pricing: any }>>('/admin/pricing')
+
+    return response.data.data.pricing
+  },
+
+  async updateAdminPricing(pricing: any): Promise<any> {
+    const response = await apiClient.put<DashboardResponse<{ pricing: any }>>('/admin/pricing', { pricing })
+
+    return response.data.data.pricing
+  },
+
   async saveOrderGameAccount(orderId: number, payload: { email: string; password: string }): Promise<ServiceOrder> {
     const response = await apiClient.post<DashboardResponse<{ order: ServiceOrder }>>(
       `/orders/${orderId}/game-account`,

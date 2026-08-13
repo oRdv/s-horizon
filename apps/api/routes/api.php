@@ -82,6 +82,8 @@ Route::middleware('auth.jwt')->group(function (): void {
             ->middleware('permission:users.manage');
         Route::delete('/landing-boosters/{landingBooster}', [LandingBoosterController::class, 'destroy'])
             ->middleware('permission:users.manage');
+        Route::get('/pricing', [\App\Http\Controllers\Api\Admin\PricingController::class, 'index']);
+        Route::put('/pricing', [\App\Http\Controllers\Api\Admin\PricingController::class, 'update']);
     });
 
     Route::prefix('profile')->group(function (): void {

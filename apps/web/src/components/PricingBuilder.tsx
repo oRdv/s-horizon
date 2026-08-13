@@ -38,6 +38,7 @@ import {
   getPriceRow,
   isApexTier,
   priceTable,
+  setRuntimePricingTable,
   rankDivisions,
   type GameKey,
   type PriceMode,
@@ -49,6 +50,7 @@ import { getLolChampionOptions, type LolChampionOption } from '@/services/riot'
 import { systemService } from '@/services/system'
 import { useSessionStore } from '@/store/useSessionStore'
 import { useToastStore } from '@/store/useToastStore'
+import { hasPermission } from '@/utils/authz'
 import type {
   PaymentGatewayPayload,
   PaymentMethod,
@@ -202,6 +204,8 @@ const familyCards: FamilyCard[] = [
     modes: ['coaching'],
   },
 ]
+
+
 
 const divisionSteps: StepItem[] = [
   {
@@ -1273,6 +1277,7 @@ export function PricingBuilder({
   const accessToken = useSessionStore((state) => state.accessToken)
   const [game] = useState<GameKey>('lol')
   const [mode, setMode] = useState<PriceMode>('solo')
+  const [winsQueue, setWinsQueue] = useState<'solo' | 'duo'>('solo')
   const [currentTier, setCurrentTier] = useState<RankTier>('silver')
   const [currentDivision, setCurrentDivision] = useState<RankDivision>('IV')
   const [targetTier, setTargetTier] = useState<RankTier>('gold')
@@ -1282,6 +1287,33 @@ export function PricingBuilder({
   const [addons, setAddons] = useState<AddonState>(() => createInitialAddons())
   const [championQuery, setChampionQuery] = useState('')
   const [isChampionPickerOpen, setIsChampionPickerOpen] = useState(false)
+
+  // Only load admin pricing for users with admin permission to avoid leaking
+  // editable pricing to boosters or customers.
+  useEffect(() => {
+    const user = useSessionStore.getState().user
+    if (!user || !hasPermission(user, 'users.view_all')) return
+
+    let active = true
+
+    async function loadAdminPricing() {
+      try {
+        const adminPricing = await systemService.getAdminPricing()
+        if (!active) return
+        if (Array.isArray(adminPricing) && adminPricing.length) {
+          setRuntimePricingTable(adminPricing)
+        }
+      } catch (e) {
+        // ignore — fallback to built-in table
+      }
+    }
+
+    loadAdminPricing()
+
+    return () => {
+      active = false
+    }
+  }, [])
   const [championOptions, setChampionOptions] = useState<LolChampionOption[]>([])
   const [isLoadingChampions, setIsLoadingChampions] = useState(true)
   const [isPaymentWizardOpen, setIsPaymentWizardOpen] = useState(false)
@@ -1474,11 +1506,17 @@ export function PricingBuilder({
       ? `${getGameLabel(game)} · ${modeMeta.label} ${quote.ladderText}`
       : `${getGameLabel(game)} · ${modeMeta.label} ${formatTierDivision(unitTier)}`
     const descriptionText = `${modeMeta.shortDescription} ${quote.summary}.`
+    let adjustedFinalTotal = finalTotal
+    if (!isDivisionMode && mode === 'wins' && winsQueue === 'duo') {
+      const multiplier = Number(import.meta.env.VITE_WINS_DUO_MULTIPLIER ?? '1') || 1
+      adjustedFinalTotal = Math.round(finalTotal * multiplier)
+    }
+
     const { order } = await systemService.createCustomerPayment({
       service_type: modeMeta.serviceType,
       title: titleText,
       description: descriptionText,
-      amount: Math.round(finalTotal * 100),
+      amount: Math.round(adjustedFinalTotal * 100),
       metadata: {
         game,
         calculator_mode: mode,
@@ -1486,7 +1524,7 @@ export function PricingBuilder({
         base_price: baseTotal,
         addon_percent: addonPercent,
         addon_amount: addonAmount,
-        final_total: finalTotal,
+        final_total: adjustedFinalTotal,
         quote_summary: quote.summary,
         ladder_text: quote.ladderText,
         estimated_delivery_days: deliveryEstimate?.days ?? null,
@@ -1497,6 +1535,7 @@ export function PricingBuilder({
         target_tier: isDivisionMode ? targetTier : null,
         target_division: isDivisionMode && !isApexTier(targetTier) ? targetDivision : null,
         quantity: isDivisionMode ? null : quantity,
+        queue: !isDivisionMode && mode === 'wins' ? winsQueue : undefined,
         addons: isDivisionMode
           ? {
               mmr_profile: addons.mmrProfile,
@@ -1861,6 +1900,19 @@ export function PricingBuilder({
                       <span>Tipo selecionado</span>
                       <strong>{modeMeta.label}</strong>
                     </div>
+                      {mode === 'wins' ? (
+                        <div className="pricing-wins-queue">
+                          <span className="pricing-wins-queue__label">Fila das vitórias</span>
+                          <div className="pricing-wins-queue__options">
+                            <label>
+                              <input type="radio" name="winsQueue" value="solo" checked={winsQueue === 'solo'} onChange={() => setWinsQueue('solo')} /> Solo
+                            </label>
+                            <label>
+                              <input type="radio" name="winsQueue" value="duo" checked={winsQueue === 'duo'} onChange={() => setWinsQueue('duo')} /> Duo
+                            </label>
+                          </div>
+                        </div>
+                      ) : null}
                   </div>
                 )}
               </article>
