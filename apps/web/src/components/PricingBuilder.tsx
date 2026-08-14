@@ -1290,6 +1290,7 @@ export function PricingBuilder({
   const [quantity, setQuantity] = useState(1)
   const [selectableBoosters, setSelectableBoosters] = useState<AuthUser[]>([])
   const [selectedBoosterId, setSelectedBoosterId] = useState<number | null>(null)
+  const [isLoadingBoosters, setIsLoadingBoosters] = useState(false)
   const [addons, setAddons] = useState<AddonState>(() => createInitialAddons())
   const [championQuery, setChampionQuery] = useState('')
   const [isChampionPickerOpen, setIsChampionPickerOpen] = useState(false)
@@ -1401,12 +1402,26 @@ export function PricingBuilder({
   const effectiveSuperRestriction = addons.superRestriction || hasChampionSuperRestriction
 
   useEffect(() => {
-    if (mode !== 'wins' || user?.role !== 'customer') return
+    if (mode !== 'wins') return
+
+    let active = true
+    setIsLoadingBoosters(true)
 
     void systemService.getSelectableBoosters()
-      .then(setSelectableBoosters)
-      .catch(() => setSelectableBoosters([]))
-  }, [mode, user?.role])
+      .then((boosters) => {
+        if (active) setSelectableBoosters(boosters)
+      })
+      .catch(() => {
+        if (active) setSelectableBoosters([])
+      })
+      .finally(() => {
+        if (active) setIsLoadingBoosters(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [mode])
 
   useEffect(() => {
     if (mode === 'wins' && !selectableGameTiers.includes(unitTier)) {
@@ -1960,26 +1975,34 @@ export function PricingBuilder({
                 )}
               </article>
 
-              {!isDivisionMode && mode === 'wins' && user?.role === 'customer' ? (
-                <article className="pricing-stage-card pricing-stage-card--wide">
-                  <div className="pricing-stage-card__header">
+              {!isDivisionMode && mode === 'wins' ? (
+                <article className="pricing-stage-card pricing-stage-card--wide pricing-booster-stage">
+                  <div className="pricing-stage-card__header pricing-booster-stage__header">
                     <div>
                       <span className="pricing-stage-card__step">03</span>
-                      <h4>Escolha seu booster</h4>
-                      <p>Opcional. Ao escolher, o pedido pago vai direto para ele e não entra na fila geral.</p>
+                      <h4>Com quem você quer jogar?</h4>
+                      <p>Escolha um booster da Horizon ou deixe na fila geral. A escolha é opcional.</p>
                     </div>
+                    <span className="pricing-booster-stage__badge"><CheckCircle size={15} /> Escolha direta</span>
                   </div>
                   <div className="pricing-booster-grid">
                     <button className={`pricing-booster-option${selectedBoosterId === null ? ' is-active' : ''}`} onClick={() => setSelectedBoosterId(null)} type="button">
-                      <UserRound size={24} />
-                      <span><strong>Fila geral</strong><small>Qualquer booster disponível</small></span>
+                      <span className="pricing-booster-option__avatar"><UserRound size={24} /></span>
+                      <span><strong>Qualquer booster</strong><small>O primeiro disponível assume seu pedido</small></span>
+                      {selectedBoosterId === null ? <CheckCircle className="pricing-booster-option__check" size={20} /> : null}
                     </button>
+                    {isLoadingBoosters ? <div className="pricing-booster-loading"><Loader2 className="spin-icon" size={20} /> Carregando boosters...</div> : null}
                     {selectableBoosters.map((booster) => (
                       <button className={`pricing-booster-option${selectedBoosterId === booster.id ? ' is-active' : ''}`} key={booster.id} onClick={() => setSelectedBoosterId(booster.id)} type="button">
                         <span className="pricing-booster-option__avatar">{booster.profile_photo_path ? <img alt="" src={booster.profile_photo_path} /> : <UserRound size={24} />}</span>
                         <span><strong>{booster.name}</strong><small>{booster.booster_profile?.highest_rank ?? booster.booster_profile?.in_game_nick ?? 'Booster Horizon'}</small></span>
+                        {selectedBoosterId === booster.id ? <CheckCircle className="pricing-booster-option__check" size={20} /> : null}
                       </button>
                     ))}
+                  </div>
+                  <div className="pricing-booster-stage__notice">
+                    <Sparkles size={17} />
+                    <span>{selectedBoosterId === null ? 'Seu pedido será disponibilizado na fila geral após o pagamento.' : 'Após o pagamento, o pedido vai direto para o booster escolhido, sem anúncio no Discord.'}</span>
                   </div>
                 </article>
               ) : null}

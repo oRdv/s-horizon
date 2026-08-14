@@ -29,6 +29,7 @@ Route::prefix('auth')->group(function (): void {
 
 Route::post('/booster-applications/public', [BoosterApplicationController::class, 'publicStore']);
 Route::get('/landing/boosters', [LandingBoosterController::class, 'publicIndex']);
+Route::get('/boosters/selectable', [LandingBoosterController::class, 'selectable']);
 Route::post('/payments/stripe/webhook', [PaymentController::class, 'stripeWebhook']);
 Route::post('/payments/mercado-pago/webhook', [PaymentController::class, 'mercadoPagoWebhook']);
 Route::get('/booster-tracker/downloads/{platform}/signed', [BoosterTrackerController::class, 'signedDownload'])
@@ -38,8 +39,6 @@ Route::get('/booster-tracker/downloads/{platform}/signed', [BoosterTrackerContro
 
 Route::middleware('auth.jwt')->group(function (): void {
     Route::get('/me', [AuthController::class, 'me']);
-    Route::get('/boosters/selectable', [LandingBoosterController::class, 'selectable'])
-        ->middleware('role:customer');
     Route::post('/matches', [MatchReportController::class, 'store']);
 
     Route::prefix('booster-applications')->group(function (): void {

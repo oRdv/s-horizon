@@ -52,6 +52,11 @@ class OrderNotificationFlowTest extends TestCase
 
         $customer = $this->user(UserRole::Customer, 'cliente-wins-direto@horizonboost.gg');
         $booster = $this->user(UserRole::Booster, 'booster-wins-direto@horizonboost.gg');
+        $this->getJson('/api/boosters/selectable')
+            ->assertOk()
+            ->assertJsonPath('data.boosters.0.id', $booster->getKey())
+            ->assertJsonMissingPath('data.boosters.0.email')
+            ->assertJsonMissingPath('data.boosters.0.effective_permissions');
         $response = $this->withHeader('Authorization', 'Bearer '.$this->token($customer))
             ->postJson('/api/payments/customer', [
                 'service_type' => 'wins_by_rank',

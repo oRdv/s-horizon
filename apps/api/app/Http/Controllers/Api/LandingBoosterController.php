@@ -44,14 +44,26 @@ class LandingBoosterController extends Controller
 
     public function selectable(): JsonResponse
     {
+        $boosters = User::query()
+            ->where('role', UserRole::Booster->value)
+            ->where('is_active', true)
+            ->with('boosterProfile:id,user_id,in_game_nick,highest_rank')
+            ->orderBy('name')
+            ->get(['id', 'name', 'role', 'profile_photo_path'])
+            ->map(fn (User $booster): array => [
+                'id' => $booster->getKey(),
+                'name' => $booster->name,
+                'role' => $booster->role,
+                'profile_photo_path' => $booster->profile_photo_path,
+                'booster_profile' => $booster->boosterProfile ? [
+                    'in_game_nick' => $booster->boosterProfile->in_game_nick,
+                    'highest_rank' => $booster->boosterProfile->highest_rank,
+                ] : null,
+            ]);
+
         return response()->json([
             'data' => [
-                'boosters' => User::query()
-                    ->where('role', UserRole::Booster->value)
-                    ->where('is_active', true)
-                    ->with('boosterProfile:id,user_id,in_game_nick,highest_rank')
-                    ->orderBy('name')
-                    ->get(['id', 'name', 'role', 'profile_photo_path']),
+                'boosters' => $boosters,
             ],
         ]);
     }
