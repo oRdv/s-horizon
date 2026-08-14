@@ -42,6 +42,48 @@ class LandingBoosterController extends Controller
         ]);
     }
 
+    public function selectable(Request $request): JsonResponse
+    {
+        $game = $request->validate([
+            'game' => ['nullable', Rule::in(['lol', 'wild_rift'])],
+        ])['game'] ?? 'lol';
+        $gameLabel = $game === 'wild_rift' ? 'Wild Rift' : 'League of Legends';
+
+        $champions = LandingBooster::query()
+            ->where('is_active', true)
+            ->where('game', $gameLabel)
+            ->whereNotNull('user_id')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get(['user_id', 'champion_name'])
+            ->unique('user_id')
+            ->keyBy('user_id');
+
+        $boosters = User::query()
+            ->where('role', UserRole::Booster->value)
+            ->where('is_active', true)
+            ->whereIn('id', $champions->keys())
+            ->with('boosterProfile:id,user_id,highest_rank')
+            ->get(['id', 'name', 'role', 'profile_photo_path'])
+            ->map(fn (User $booster): array => [
+                'id' => $booster->getKey(),
+                'name' => $champions->get($booster->getKey())->champion_name,
+                'role' => $booster->role,
+                'profile_photo_path' => $booster->profile_photo_path,
+                'booster_profile' => $booster->boosterProfile ? [
+                    'highest_rank' => $booster->boosterProfile->highest_rank,
+                ] : null,
+            ])
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
+
+        return response()->json([
+            'data' => [
+                'boosters' => $boosters,
+            ],
+        ]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $booster = LandingBooster::query()->create($this->validated($request));

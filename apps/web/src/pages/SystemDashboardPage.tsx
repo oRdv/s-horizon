@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
 import {
   ArrowRight,
@@ -407,6 +407,26 @@ function MasterDashboardView({ dashboard }: { dashboard: MasterDashboard }) {
   const [boosterForm, setBoosterForm] = useState<LandingBoosterFormState>(() =>
     getEmptyLandingBoosterForm((dashboard.landing_boosters?.length ?? 0) + 1),
   )
+  const missingChampionCount = useMemo(() => {
+    const linkedBoosterIds = new Set(
+      landingBoosters
+        .filter((booster) => booster.is_active && booster.user_id && booster.champion_name.trim())
+        .map((booster) => booster.user_id),
+    )
+
+    return dashboard.booster_users.filter((booster) => booster.is_active && !linkedBoosterIds.has(booster.id)).length
+  }, [dashboard.booster_users, landingBoosters])
+
+  useEffect(() => {
+    if (!missingChampionCount) return
+
+    addToast({
+      tone: 'info',
+      title: `${missingChampionCount} booster${missingChampionCount > 1 ? 's' : ''} sem campeão`,
+      description: 'Esses boosters não aparecem na seleção de Vitórias até receberem um campeão no painel.',
+      durationMs: 10_000,
+    })
+  }, [addToast, missingChampionCount])
 
   function resetLandingBoosterForm(nextBoosters = landingBoosters) {
     setEditingLandingBoosterId(null)

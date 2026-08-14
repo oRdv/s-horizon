@@ -93,6 +93,14 @@ export function AppShell({ userName, onLogout, children }: AppShellProps) {
               ) : null}
             </>
           ) : null}
+          {user?.role === 'master_admin' ? (
+            <NavLink
+              to="/orders"
+              className={({ isActive }) => `dashboard-shell__nav-link${isActive ? ' is-active' : ''}`}
+            >
+              Pedidos e chats
+            </NavLink>
+          ) : null}
           {user?.role === 'booster' ? (
             <NavLink
               to="/booster/orders"

@@ -72,7 +72,7 @@ class DashboardController extends Controller
                 'booster_users' => User::query()
                     ->where('role', UserRole::Booster->value)
                     ->orderBy('name')
-                    ->get(['id', 'name', 'email', 'role']),
+                    ->get(['id', 'name', 'email', 'role', 'is_active']),
                 'live_boosters' => BoosterTrackerSession::query()
                     ->with(['booster:id,name,email,role,profile_photo_path', 'serviceOrder:id,title,status'])
                     ->latest('last_heartbeat_at')

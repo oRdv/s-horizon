@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { X } from 'lucide-react'
 
 import { AppShell } from '@/components/AppShell'
 import { systemService } from '@/services/system'
 import { useSessionStore } from '@/store/useSessionStore'
 import { useToastStore } from '@/store/useToastStore'
-import type { PriceRange } from '@/data/pricing'
 import { getRuntimePriceTable } from '@/data/pricing'
 
 export function AdminPricingPage() {

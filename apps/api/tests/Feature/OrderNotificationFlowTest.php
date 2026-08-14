@@ -8,6 +8,7 @@ use App\Enums\PaymentStatus;
 use App\Enums\ServiceOrderStatus;
 use App\Enums\UserRole;
 use App\Mail\PlainNotificationMail;
+use App\Models\LandingBooster;
 use App\Models\Payment;
 use App\Models\ServiceOrder;
 use App\Models\User;
@@ -38,6 +39,162 @@ class OrderNotificationFlowTest extends TestCase
         ])->render();
 
         $this->assertStringContainsString('Atualizacao privada do pedido.', $rendered);
+    }
+
+    public function test_customer_selected_booster_receives_paid_wins_order_without_discord_notification(): void
+    {
+        Mail::fake();
+        Http::fake();
+        config([
+            'notifications.channels.email.enabled' => true,
+            'notifications.channels.discord.enabled' => true,
+            'notifications.channels.discord.webhook_url' => 'https://discord.test/orders',
+        ]);
+
+        $customer = $this->user(UserRole::Customer, 'cliente-wins-direto@horizonboost.gg');
+        $booster = $this->user(UserRole::Booster, 'booster-wins-direto@horizonboost.gg');
+        LandingBooster::query()->create([
+            'user_id' => $booster->getKey(),
+            'nick' => 'Nome que não pode aparecer',
+            'champion_name' => 'Ahri',
+            'rank_label' => 'Diamante',
+            'rank_key' => 'diamond',
+            'game' => 'League of Legends',
+            'sort_order' => 1,
+            'is_active' => true,
+        ]);
+        $wildRiftBooster = $this->user(UserRole::Booster, 'booster-wild-rift@horizonboost.gg');
+        LandingBooster::query()->create([
+            'user_id' => $wildRiftBooster->getKey(),
+            'nick' => 'Outro nome privado',
+            'champion_name' => 'Akshan',
+            'rank_label' => 'Mestre',
+            'rank_key' => 'master',
+            'game' => 'Wild Rift',
+            'sort_order' => 2,
+            'is_active' => true,
+        ]);
+        $this->getJson('/api/boosters/selectable?game=lol')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.boosters')
+            ->assertJsonPath('data.boosters.0.id', $booster->getKey())
+            ->assertJsonPath('data.boosters.0.name', 'Ahri')
+            ->assertJsonMissing(['Nome que não pode aparecer'])
+            ->assertJsonMissingPath('data.boosters.0.email')
+            ->assertJsonMissingPath('data.boosters.0.effective_permissions');
+        $this->getJson('/api/boosters/selectable?game=wild_rift')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.boosters')
+            ->assertJsonPath('data.boosters.0.id', $wildRiftBooster->getKey())
+            ->assertJsonPath('data.boosters.0.name', 'Akshan');
+        $this->withHeader('Authorization', 'Bearer '.$this->token($customer))
+            ->postJson('/api/payments/customer', [
+                'service_type' => 'wins_by_rank',
+                'title' => 'Vitórias no Wild Rift',
+                'amount' => 4900,
+                'booster_id' => $booster->getKey(),
+                'metadata' => ['game' => 'wild_rift'],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('error.code', 'BOOSTER_GAME_MISMATCH');
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->token($customer))
+            ->postJson('/api/payments/customer', [
+                'service_type' => 'wins_by_rank',
+                'title' => 'Vitórias Duo Diamante IV',
+                'amount' => 4900,
+                'booster_id' => $booster->getKey(),
+                'metadata' => ['game' => 'lol', 'queue' => 'duo'],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.order.booster_id', $booster->getKey());
+
+        $order = ServiceOrder::query()->findOrFail($response->json('data.order.id'));
+        $payment = Payment::query()->create([
+            'user_id' => $customer->getKey(),
+            'order_id' => $order->getKey(),
+            'boost_id' => $order->getKey(),
+            'provider' => PaymentProvider::MercadoPago->value,
+            'method' => PaymentMethod::Pix->value,
+            'status' => PaymentStatus::WaitingPayment->value,
+            'amount' => 4900,
+            'base_amount' => 4900,
+            'fee_amount' => 0,
+            'discount_amount' => 0,
+            'final_amount' => 4900,
+            'currency' => 'BRL',
+            'installments' => 1,
+            'customer_email' => $customer->email,
+        ]);
+
+        app(PaymentService::class)->markPaid($payment, ['id' => 'mp-wins-direto']);
+
+        $this->assertDatabaseHas('service_orders', [
+            'id' => $order->getKey(),
+            'booster_id' => $booster->getKey(),
+            'status' => ServiceOrderStatus::BoosterAssigned->value,
+        ]);
+        $this->assertDatabaseHas('order_conversations', [
+            'service_order_id' => $order->getKey(),
+            'booster_id' => $booster->getKey(),
+        ]);
+        Mail::assertSent(PlainNotificationMail::class, 1);
+        Http::assertNothingSent();
+    }
+
+    public function test_pending_mercado_pago_payment_is_reconciled_without_webhook(): void
+    {
+        Mail::fake();
+        Http::fake([
+            'https://api.mercadopago.com/v1/payments/mp-missed-webhook' => Http::response([
+                'id' => 'mp-missed-webhook',
+                'status' => 'approved',
+                'transaction_amount' => 16.80,
+                'date_approved' => now()->toIso8601String(),
+            ]),
+        ]);
+        config([
+            'services.mercado_pago.access_token' => 'test-token',
+            'notifications.channels.email.enabled' => false,
+            'notifications.channels.discord.enabled' => false,
+        ]);
+
+        $customer = $this->user(UserRole::Customer, 'cliente-reconcile@horizonboost.gg');
+        $order = ServiceOrder::query()->create([
+            'customer_id' => $customer->getKey(),
+            'service_type' => 'wins_by_rank',
+            'title' => 'Vitórias Esmeralda I',
+            'status' => ServiceOrderStatus::WaitingPayment->value,
+            'price' => 16.80,
+            'base_price' => 1680,
+            'final_price' => 1680,
+            'payment_status' => PaymentStatus::WaitingPayment->value,
+        ]);
+        $payment = Payment::query()->create([
+            'user_id' => $customer->getKey(),
+            'order_id' => $order->getKey(),
+            'boost_id' => $order->getKey(),
+            'provider' => PaymentProvider::MercadoPago->value,
+            'provider_payment_id' => 'mp-missed-webhook',
+            'method' => PaymentMethod::Pix->value,
+            'status' => PaymentStatus::WaitingPayment->value,
+            'amount' => 1680,
+            'base_amount' => 1680,
+            'fee_amount' => 0,
+            'discount_amount' => 0,
+            'final_amount' => 1680,
+            'currency' => 'BRL',
+            'installments' => 1,
+            'customer_email' => $customer->email,
+        ]);
+        $payment->forceFill(['updated_at' => now()->subMinutes(2)])->saveQuietly();
+
+        $this->withHeader('Authorization', 'Bearer '.$this->token($customer))
+            ->getJson('/api/orders')
+            ->assertOk()
+            ->assertJsonPath('data.orders.0.payment_status', PaymentStatus::Paid->value);
+        $this->assertSame(PaymentStatus::Paid->value, $payment->refresh()->status);
+        $this->assertSame(PaymentStatus::Paid->value, $order->refresh()->payment_status);
+        $this->assertSame(ServiceOrderStatus::WaitingBooster->value, $order->status);
     }
 
     public function test_paid_order_available_and_claimed_order_notifications_are_dispatched(): void

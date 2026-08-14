@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Notifications\OrderNotificationService;
 use App\Services\Orders\ClaimOrderService;
 use App\Services\Orders\OrderChatService;
+use App\Services\Payments\PaymentService;
 use App\Services\Audit\AccountAuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,10 +19,14 @@ use Illuminate\Validation\ValidationException;
 
 class ServiceOrderController extends Controller
 {
-    public function index(Request $request, OrderChatService $chat): JsonResponse
+    public function index(Request $request, OrderChatService $chat, PaymentService $payments): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
+
+        if ($user->hasRole(UserRole::Customer) || $user->hasRole(UserRole::MasterAdmin)) {
+            $payments->reconcilePendingMercadoPagoPayments();
+        }
 
         $query = ServiceOrder::query()
             ->with([
@@ -46,7 +51,7 @@ class ServiceOrderController extends Controller
         return response()->json(['data' => ['orders' => $orders]]);
     }
 
-    public function show(Request $request, ServiceOrder $serviceOrder, OrderChatService $chat): JsonResponse
+    public function show(Request $request, ServiceOrder $serviceOrder, OrderChatService $chat, PaymentService $payments): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
@@ -55,6 +60,11 @@ class ServiceOrderController extends Controller
             return response()->json([
                 'message' => 'Voce nao tem acesso a este pedido.',
             ], 403);
+        }
+
+        if ($user->hasRole(UserRole::Customer) || $user->hasRole(UserRole::MasterAdmin)) {
+            $payments->reconcilePendingMercadoPagoPayments();
+            $serviceOrder->refresh();
         }
 
         return response()->json([
