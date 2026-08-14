@@ -221,6 +221,12 @@ class PaymentController extends Controller
         MercadoPagoPaymentProvider $mercadoPago,
     ): JsonResponse {
         if (! $this->isValidMercadoPagoSignature($request)) {
+            Log::warning('payments.mercado_pago_webhook_signature_invalid', [
+                'has_signature' => $request->hasHeader('x-signature'),
+                'has_request_id' => $request->hasHeader('x-request-id'),
+                'data_id' => $request->input('data.id') ?? $request->query('data.id') ?? $request->query('id'),
+            ]);
+
             return $this->error('Assinatura Mercado Pago invalida.', 400);
         }
 

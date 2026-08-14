@@ -12,8 +12,10 @@ use App\Models\User;
 use App\Services\Notifications\OrderNotificationService;
 use App\Services\Orders\OrderChatService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 use RuntimeException;
+use Throwable;
 
 final class PaymentService
 {
@@ -259,6 +261,37 @@ final class PaymentService
         }
 
         return $payment->refresh();
+    }
+
+    public function reconcilePendingMercadoPagoPayments(): int
+    {
+        $updated = 0;
+
+        Payment::query()
+            ->where('provider', PaymentProvider::MercadoPago->value)
+            ->whereIn('status', [
+                PaymentStatus::WaitingPayment->value,
+                PaymentStatus::Processing->value,
+            ])
+            ->whereNotNull('provider_payment_id')
+            ->where('created_at', '>=', now()->subDay())
+            ->oldest()
+            ->limit(50)
+            ->get()
+            ->each(function (Payment $payment) use (&$updated): void {
+                try {
+                    $status = $payment->status;
+                    $reconciled = $this->reconcileProviderStatus($payment);
+                    $updated += $reconciled->status !== $status ? 1 : 0;
+                } catch (Throwable $exception) {
+                    Log::warning('payments.scheduled_reconcile_failed', [
+                        'payment_id' => $payment->getKey(),
+                        'message' => $exception->getMessage(),
+                    ]);
+                }
+            });
+
+        return $updated;
     }
 
     public function applyMercadoPagoStatus(Payment $payment, array $providerPayment): Payment

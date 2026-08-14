@@ -101,6 +101,58 @@ class OrderNotificationFlowTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_pending_mercado_pago_payment_is_reconciled_without_webhook(): void
+    {
+        Mail::fake();
+        Http::fake([
+            'https://api.mercadopago.com/v1/payments/mp-missed-webhook' => Http::response([
+                'id' => 'mp-missed-webhook',
+                'status' => 'approved',
+                'transaction_amount' => 16.80,
+                'date_approved' => now()->toIso8601String(),
+            ]),
+        ]);
+        config([
+            'services.mercado_pago.access_token' => 'test-token',
+            'notifications.channels.email.enabled' => false,
+            'notifications.channels.discord.enabled' => false,
+        ]);
+
+        $customer = $this->user(UserRole::Customer, 'cliente-reconcile@horizonboost.gg');
+        $order = ServiceOrder::query()->create([
+            'customer_id' => $customer->getKey(),
+            'service_type' => 'wins_by_rank',
+            'title' => 'Vitórias Esmeralda I',
+            'status' => ServiceOrderStatus::WaitingPayment->value,
+            'price' => 16.80,
+            'base_price' => 1680,
+            'final_price' => 1680,
+            'payment_status' => PaymentStatus::WaitingPayment->value,
+        ]);
+        $payment = Payment::query()->create([
+            'user_id' => $customer->getKey(),
+            'order_id' => $order->getKey(),
+            'boost_id' => $order->getKey(),
+            'provider' => PaymentProvider::MercadoPago->value,
+            'provider_payment_id' => 'mp-missed-webhook',
+            'method' => PaymentMethod::Pix->value,
+            'status' => PaymentStatus::WaitingPayment->value,
+            'amount' => 1680,
+            'base_amount' => 1680,
+            'fee_amount' => 0,
+            'discount_amount' => 0,
+            'final_amount' => 1680,
+            'currency' => 'BRL',
+            'installments' => 1,
+            'customer_email' => $customer->email,
+        ]);
+
+        $this->assertSame(1, app(PaymentService::class)->reconcilePendingMercadoPagoPayments());
+        $this->assertSame(PaymentStatus::Paid->value, $payment->refresh()->status);
+        $this->assertSame(PaymentStatus::Paid->value, $order->refresh()->payment_status);
+        $this->assertSame(ServiceOrderStatus::WaitingBooster->value, $order->status);
+    }
+
     public function test_paid_order_available_and_claimed_order_notifications_are_dispatched(): void
     {
         Mail::fake();
