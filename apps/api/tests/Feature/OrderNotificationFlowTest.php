@@ -63,20 +63,47 @@ class OrderNotificationFlowTest extends TestCase
             'sort_order' => 1,
             'is_active' => true,
         ]);
-        $this->getJson('/api/boosters/selectable')
+        $wildRiftBooster = $this->user(UserRole::Booster, 'booster-wild-rift@horizonboost.gg');
+        LandingBooster::query()->create([
+            'user_id' => $wildRiftBooster->getKey(),
+            'nick' => 'Outro nome privado',
+            'champion_name' => 'Akshan',
+            'rank_label' => 'Mestre',
+            'rank_key' => 'master',
+            'game' => 'Wild Rift',
+            'sort_order' => 2,
+            'is_active' => true,
+        ]);
+        $this->getJson('/api/boosters/selectable?game=lol')
             ->assertOk()
+            ->assertJsonCount(1, 'data.boosters')
             ->assertJsonPath('data.boosters.0.id', $booster->getKey())
             ->assertJsonPath('data.boosters.0.name', 'Ahri')
             ->assertJsonMissing(['Nome que não pode aparecer'])
             ->assertJsonMissingPath('data.boosters.0.email')
             ->assertJsonMissingPath('data.boosters.0.effective_permissions');
+        $this->getJson('/api/boosters/selectable?game=wild_rift')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.boosters')
+            ->assertJsonPath('data.boosters.0.id', $wildRiftBooster->getKey())
+            ->assertJsonPath('data.boosters.0.name', 'Akshan');
+        $this->withHeader('Authorization', 'Bearer '.$this->token($customer))
+            ->postJson('/api/payments/customer', [
+                'service_type' => 'wins_by_rank',
+                'title' => 'Vitórias no Wild Rift',
+                'amount' => 4900,
+                'booster_id' => $booster->getKey(),
+                'metadata' => ['game' => 'wild_rift'],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('error.code', 'BOOSTER_GAME_MISMATCH');
         $response = $this->withHeader('Authorization', 'Bearer '.$this->token($customer))
             ->postJson('/api/payments/customer', [
                 'service_type' => 'wins_by_rank',
                 'title' => 'Vitórias Duo Diamante IV',
                 'amount' => 4900,
                 'booster_id' => $booster->getKey(),
-                'metadata' => ['queue' => 'duo'],
+                'metadata' => ['game' => 'lol', 'queue' => 'duo'],
             ])
             ->assertCreated()
             ->assertJsonPath('data.order.booster_id', $booster->getKey());

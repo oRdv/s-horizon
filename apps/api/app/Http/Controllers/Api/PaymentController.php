@@ -7,6 +7,7 @@ use App\Enums\PaymentStatus;
 use App\Enums\ServiceOrderStatus;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Models\LandingBooster;
 use App\Models\Payment;
 use App\Models\ServiceOrder;
 use App\Models\User;
@@ -289,6 +290,20 @@ class PaymentController extends Controller
 
         $metadata = $validated['metadata'] ?? [];
         if (filled($validated['booster_id'] ?? null)) {
+            $gameLabel = match (data_get($metadata, 'game')) {
+                'lol' => 'League of Legends',
+                'wild_rift' => 'Wild Rift',
+                default => null,
+            };
+
+            if (! $gameLabel || ! LandingBooster::query()
+                ->where('user_id', $validated['booster_id'])
+                ->where('game', $gameLabel)
+                ->where('is_active', true)
+                ->exists()) {
+                return $this->error('O booster selecionado não atende ao jogo escolhido.', 422, 'BOOSTER_GAME_MISMATCH');
+            }
+
             data_set($metadata, 'assignment', [
                 'source' => 'customer_selection',
                 'booster_id' => (int) $validated['booster_id'],

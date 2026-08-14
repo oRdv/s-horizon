@@ -8,6 +8,7 @@ import {
   Clock3,
   Copy,
   CreditCard,
+  Gamepad2,
   Headphones,
   Loader2,
   Minus,
@@ -91,6 +92,11 @@ interface FamilyCard {
   icon: LucideIcon
   modes: PriceMode[]
 }
+
+const selectableGames = [
+  { game: 'lol', label: 'League of Legends', helper: 'Solo/Duo no LoL.' },
+  { game: 'wild_rift', label: 'Wild Rift', helper: 'Fila mobile.' },
+] satisfies Array<{ game: Extract<GameKey, 'lol' | 'wild_rift'>; label: string; helper: string }>
 
 interface StepItem {
   index: string
@@ -1278,7 +1284,7 @@ export function PricingBuilder({
   const addToast = useToastStore((state) => state.addToast)
   const user = useSessionStore((state) => state.user)
   const accessToken = useSessionStore((state) => state.accessToken)
-  const [game] = useState<GameKey>('lol')
+  const [game, setGame] = useState<GameKey>('lol')
   const [mode, setMode] = useState<PriceMode>('solo')
   const [winsQueue, setWinsQueue] = useState<WinsQueue>('solo')
   const [currentTier, setCurrentTier] = useState<RankTier>('silver')
@@ -1407,7 +1413,10 @@ export function PricingBuilder({
     let active = true
     setIsLoadingBoosters(true)
 
-    void systemService.getSelectableBoosters()
+    setSelectableBoosters([])
+    setSelectedBoosterId(null)
+
+    void systemService.getSelectableBoosters(game === 'wild_rift' ? 'wild_rift' : 'lol')
       .then((boosters) => {
         if (active) setSelectableBoosters(boosters)
       })
@@ -1421,7 +1430,7 @@ export function PricingBuilder({
     return () => {
       active = false
     }
-  }, [mode])
+  }, [game, mode])
 
   useEffect(() => {
     if (mode === 'wins' && !selectableGameTiers.includes(unitTier)) {
@@ -1719,6 +1728,20 @@ export function PricingBuilder({
           <h2>{title}</h2>
           <p>{description}</p>
         </div>
+      </div>
+
+      <div className="pricing-game-rail" aria-label="Jogo">
+        {selectableGames.map((item) => (
+          <button
+            key={item.game}
+            className={`pricing-game-chip${game === item.game ? ' is-active' : ''}`}
+            onClick={() => setGame(item.game)}
+            type="button"
+          >
+            <span className="pricing-game-chip__icon"><Gamepad2 size={16} /></span>
+            <span className="pricing-game-chip__copy"><strong>{item.label}</strong><small>{item.helper}</small></span>
+          </button>
+        ))}
       </div>
 
       <div className="pricing-family-grid" aria-label="Famílias de serviço">

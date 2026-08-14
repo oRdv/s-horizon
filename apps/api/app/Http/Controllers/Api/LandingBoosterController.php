@@ -42,10 +42,16 @@ class LandingBoosterController extends Controller
         ]);
     }
 
-    public function selectable(): JsonResponse
+    public function selectable(Request $request): JsonResponse
     {
+        $game = $request->validate([
+            'game' => ['nullable', Rule::in(['lol', 'wild_rift'])],
+        ])['game'] ?? 'lol';
+        $gameLabel = $game === 'wild_rift' ? 'Wild Rift' : 'League of Legends';
+
         $champions = LandingBooster::query()
             ->where('is_active', true)
+            ->where('game', $gameLabel)
             ->whereNotNull('user_id')
             ->orderBy('sort_order')
             ->orderBy('id')

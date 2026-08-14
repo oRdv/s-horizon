@@ -56,8 +56,10 @@ export const systemService = {
     return response.data.data
   },
 
-  async getSelectableBoosters(): Promise<AuthUser[]> {
-    const response = await apiClient.get<DashboardResponse<{ boosters: AuthUser[] }>>('/boosters/selectable')
+  async getSelectableBoosters(game: 'lol' | 'wild_rift'): Promise<AuthUser[]> {
+    const response = await apiClient.get<DashboardResponse<{ boosters: AuthUser[] }>>('/boosters/selectable', {
+      params: { game },
+    })
 
     return response.data.data.boosters
   },
