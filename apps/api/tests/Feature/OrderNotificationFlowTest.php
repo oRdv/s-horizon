@@ -146,8 +146,12 @@ class OrderNotificationFlowTest extends TestCase
             'installments' => 1,
             'customer_email' => $customer->email,
         ]);
+        $payment->forceFill(['updated_at' => now()->subMinutes(2)])->saveQuietly();
 
-        $this->assertSame(1, app(PaymentService::class)->reconcilePendingMercadoPagoPayments());
+        $this->withHeader('Authorization', 'Bearer '.$this->token($customer))
+            ->getJson('/api/orders')
+            ->assertOk()
+            ->assertJsonPath('data.orders.0.payment_status', PaymentStatus::Paid->value);
         $this->assertSame(PaymentStatus::Paid->value, $payment->refresh()->status);
         $this->assertSame(PaymentStatus::Paid->value, $order->refresh()->payment_status);
         $this->assertSame(ServiceOrderStatus::WaitingBooster->value, $order->status);

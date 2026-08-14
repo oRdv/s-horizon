@@ -275,6 +275,7 @@ final class PaymentService
             ])
             ->whereNotNull('provider_payment_id')
             ->where('created_at', '>=', now()->subDay())
+            ->where('updated_at', '<=', now()->subMinute())
             ->oldest()
             ->limit(50)
             ->get()
