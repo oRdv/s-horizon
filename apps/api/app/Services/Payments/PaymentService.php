@@ -176,7 +176,10 @@ final class PaymentService
 
         if ($payment->serviceOrder?->booster_id) {
             app(OrderChatService::class)->ensureConversation($payment->serviceOrder->refresh());
-            app(OrderNotificationService::class)->assigned($payment->serviceOrder->refresh());
+            $channels = data_get($payment->serviceOrder->metadata ?? [], 'assignment.source') === 'customer_selection'
+                ? ['email']
+                : null;
+            app(OrderNotificationService::class)->assigned($payment->serviceOrder->refresh(), $channels);
         } else {
             app(OrderNotificationService::class)->available($payment->serviceOrder->refresh()->loadMissing('customer'));
         }

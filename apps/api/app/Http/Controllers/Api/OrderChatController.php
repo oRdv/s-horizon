@@ -47,7 +47,7 @@ class OrderChatController extends Controller
         /** @var User $user */
         $user = $request->user();
         $chat->authorize($user, $serviceOrder);
-        $chat->assertCanSend($serviceOrder);
+        $chat->assertCanSend($serviceOrder, $user);
 
         $validated = $request->validate([
             'body' => ['required', 'string', 'max:2000'],
@@ -93,7 +93,7 @@ class OrderChatController extends Controller
         $user = $request->user();
         $chat->authorizeConversation($user, $conversation);
         $chat->assertConversationActive($conversation);
-        $chat->assertCanSend($conversation->serviceOrder);
+        $chat->assertCanSend($conversation->serviceOrder, $user);
 
         $validated = $request->validate([
             'message' => ['required', 'string', 'max:2000'],

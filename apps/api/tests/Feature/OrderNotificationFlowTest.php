@@ -40,6 +40,62 @@ class OrderNotificationFlowTest extends TestCase
         $this->assertStringContainsString('Atualizacao privada do pedido.', $rendered);
     }
 
+    public function test_customer_selected_booster_receives_paid_wins_order_without_discord_notification(): void
+    {
+        Mail::fake();
+        Http::fake();
+        config([
+            'notifications.channels.email.enabled' => true,
+            'notifications.channels.discord.enabled' => true,
+            'notifications.channels.discord.webhook_url' => 'https://discord.test/orders',
+        ]);
+
+        $customer = $this->user(UserRole::Customer, 'cliente-wins-direto@horizonboost.gg');
+        $booster = $this->user(UserRole::Booster, 'booster-wins-direto@horizonboost.gg');
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->token($customer))
+            ->postJson('/api/payments/customer', [
+                'service_type' => 'wins_by_rank',
+                'title' => 'Vitórias Duo Diamante IV',
+                'amount' => 4900,
+                'booster_id' => $booster->getKey(),
+                'metadata' => ['queue' => 'duo'],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.order.booster_id', $booster->getKey());
+
+        $order = ServiceOrder::query()->findOrFail($response->json('data.order.id'));
+        $payment = Payment::query()->create([
+            'user_id' => $customer->getKey(),
+            'order_id' => $order->getKey(),
+            'boost_id' => $order->getKey(),
+            'provider' => PaymentProvider::MercadoPago->value,
+            'method' => PaymentMethod::Pix->value,
+            'status' => PaymentStatus::WaitingPayment->value,
+            'amount' => 4900,
+            'base_amount' => 4900,
+            'fee_amount' => 0,
+            'discount_amount' => 0,
+            'final_amount' => 4900,
+            'currency' => 'BRL',
+            'installments' => 1,
+            'customer_email' => $customer->email,
+        ]);
+
+        app(PaymentService::class)->markPaid($payment, ['id' => 'mp-wins-direto']);
+
+        $this->assertDatabaseHas('service_orders', [
+            'id' => $order->getKey(),
+            'booster_id' => $booster->getKey(),
+            'status' => ServiceOrderStatus::BoosterAssigned->value,
+        ]);
+        $this->assertDatabaseHas('order_conversations', [
+            'service_order_id' => $order->getKey(),
+            'booster_id' => $booster->getKey(),
+        ]);
+        Mail::assertSent(PlainNotificationMail::class, 1);
+        Http::assertNothingSent();
+    }
+
     public function test_paid_order_available_and_claimed_order_notifications_are_dispatched(): void
     {
         Mail::fake();

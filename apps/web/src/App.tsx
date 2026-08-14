@@ -178,7 +178,7 @@ function App() {
         />
         <Route
           element={
-            <ProtectedRoute roles={['customer']}>
+            <ProtectedRoute roles={['customer', 'master_admin']}>
               <OrdersPage />
             </ProtectedRoute>
           }

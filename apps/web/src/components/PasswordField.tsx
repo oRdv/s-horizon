@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, KeyboardEvent, PointerEvent } from 'react'
+import type { InputHTMLAttributes, KeyboardEvent } from 'react'
 import { useRef, useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 

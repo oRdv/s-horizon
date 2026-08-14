@@ -42,6 +42,20 @@ class LandingBoosterController extends Controller
         ]);
     }
 
+    public function selectable(): JsonResponse
+    {
+        return response()->json([
+            'data' => [
+                'boosters' => User::query()
+                    ->where('role', UserRole::Booster->value)
+                    ->where('is_active', true)
+                    ->with('boosterProfile:id,user_id,in_game_nick,highest_rank')
+                    ->orderBy('name')
+                    ->get(['id', 'name', 'role', 'profile_photo_path']),
+            ],
+        ]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $booster = LandingBooster::query()->create($this->validated($request));

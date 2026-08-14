@@ -3013,6 +3013,108 @@ p {
   gap: 0.65rem;
 }
 
+.pricing-wins-queue {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.pricing-wins-queue__label {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pricing-wins-queue__options,
+.pricing-booster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: 0.75rem;
+}
+
+.pricing-wins-queue__option,
+.pricing-booster-option {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  min-height: 4.5rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  text-align: left;
+}
+
+.pricing-wins-queue__option {
+  display: grid;
+}
+
+.pricing-wins-queue__option small,
+.pricing-booster-option small {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--text-muted);
+}
+
+.pricing-wins-queue__option.is-active,
+.pricing-booster-option.is-active {
+  border-color: rgba(196, 58, 58, 0.78);
+  background: rgba(156, 17, 17, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(255, 122, 122, 0.1);
+}
+
+.pricing-booster-option__avatar {
+  display: grid;
+  flex: 0 0 2.75rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.pricing-booster-option__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.admin-order-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 0.75rem;
+  max-width: 32.75rem;
+  margin-bottom: 1rem;
+}
+
+.admin-order-filters label {
+  display: grid;
+  gap: 0.4rem;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.admin-order-filters select {
+  min-height: 3rem;
+  padding: 0.8rem 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--field-bg);
+  color: var(--text);
+}
+
+.admin-order-group-title {
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+  margin-top: 0.75rem;
+  color: var(--text);
+}
+
 .pricing-inline-chip,
 .pricing-division-pill {
   min-height: 2.85rem;

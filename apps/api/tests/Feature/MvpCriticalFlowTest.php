@@ -22,6 +22,40 @@ class MvpCriticalFlowTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_master_admin_can_list_orders_and_message_completed_order_chat(): void
+    {
+        $customer = $this->user(UserRole::Customer, 'cliente-chat-admin@horizonboost.gg');
+        $booster = $this->user(UserRole::Booster, 'booster-chat-admin@horizonboost.gg');
+        $master = $this->user(UserRole::MasterAdmin, 'master-chat@horizonboost.gg');
+        $order = ServiceOrder::query()->create([
+            'customer_id' => $customer->getKey(),
+            'booster_id' => $booster->getKey(),
+            'service_type' => 'solo_boost',
+            'title' => 'Pedido concluído',
+            'status' => ServiceOrderStatus::Completed->value,
+            'payment_status' => PaymentStatus::Paid->value,
+            'price' => 100,
+            'completed_at' => now(),
+        ]);
+        $masterToken = $this->loginToken($master);
+
+        $this->withHeader('Authorization', 'Bearer '.$masterToken)
+            ->getJson('/api/orders')
+            ->assertOk()
+            ->assertJsonPath('data.orders.0.id', $order->getKey())
+            ->assertJsonPath('data.orders.0.booster.name', $booster->name);
+
+        $this->withHeader('Authorization', 'Bearer '.$masterToken)
+            ->postJson('/api/orders/'.$order->getKey().'/chat/messages', ['body' => 'Mensagem do admin no serviço concluído.'])
+            ->assertCreated()
+            ->assertJsonPath('data.message.sender_type', 'ADMIN')
+            ->assertJsonPath('data.message.sender.name', $master->name);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->loginToken($customer))
+            ->postJson('/api/orders/'.$order->getKey().'/chat/messages', ['body' => 'Mensagem tardia do cliente.'])
+            ->assertUnprocessable();
+    }
+
     public function test_customer_pix_checkout_webhook_booster_claim_game_account_and_chat_flow(): void
     {
         config([

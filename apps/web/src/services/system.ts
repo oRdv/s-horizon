@@ -56,6 +56,12 @@ export const systemService = {
     return response.data.data
   },
 
+  async getSelectableBoosters(): Promise<AuthUser[]> {
+    const response = await apiClient.get<DashboardResponse<{ boosters: AuthUser[] }>>('/boosters/selectable')
+
+    return response.data.data.boosters
+  },
+
   async createLandingBooster(payload: LandingBoosterPayload): Promise<LandingBooster> {
     const response = await apiClient.post<DashboardResponse<{ booster: LandingBooster }>>('/admin/landing-boosters', payload)
 
@@ -187,6 +193,7 @@ export const systemService = {
     description?: string
     amount: number
     metadata?: Record<string, unknown>
+    booster_id?: number
   }): Promise<{ order: ServiceOrder }> {
     const response = await apiClient.post<DashboardResponse<{ order: ServiceOrder }>>('/payments/customer', payload)
 

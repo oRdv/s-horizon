@@ -268,10 +268,30 @@ class PaymentController extends Controller
             'description' => ['nullable', 'string'],
             'amount' => ['required', 'integer', 'min:1'],
             'metadata' => ['nullable', 'array'],
+            'booster_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('users', 'id')->where(fn ($query) => $query
+                    ->where('role', UserRole::Booster->value)
+                    ->where('is_active', true)),
+            ],
         ]);
+
+        if (filled($validated['booster_id'] ?? null) && $validated['service_type'] !== 'wins_by_rank') {
+            return $this->error('A seleção direta de booster está disponível apenas para pacotes de vitórias.', 422, 'BOOSTER_SELECTION_INVALID');
+        }
+
+        $metadata = $validated['metadata'] ?? [];
+        if (filled($validated['booster_id'] ?? null)) {
+            data_set($metadata, 'assignment', [
+                'source' => 'customer_selection',
+                'booster_id' => (int) $validated['booster_id'],
+            ]);
+        }
 
         $order = ServiceOrder::query()->create([
             'customer_id' => $user->getKey(),
+            'booster_id' => $validated['booster_id'] ?? null,
             'created_by' => $user->getKey(),
             'service_type' => $validated['service_type'],
             'title' => $validated['title'],
@@ -281,7 +301,7 @@ class PaymentController extends Controller
             'base_price' => $validated['amount'],
             'final_price' => $validated['amount'],
             'currency' => 'BRL',
-            'metadata' => $validated['metadata'] ?? [],
+            'metadata' => $metadata,
             'purchased_at' => now(),
         ]);
 

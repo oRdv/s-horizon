@@ -38,6 +38,8 @@ Route::get('/booster-tracker/downloads/{platform}/signed', [BoosterTrackerContro
 
 Route::middleware('auth.jwt')->group(function (): void {
     Route::get('/me', [AuthController::class, 'me']);
+    Route::get('/boosters/selectable', [LandingBoosterController::class, 'selectable'])
+        ->middleware('role:customer');
     Route::post('/matches', [MatchReportController::class, 'store']);
 
     Route::prefix('booster-applications')->group(function (): void {
