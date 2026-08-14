@@ -8,6 +8,7 @@ use App\Enums\PaymentStatus;
 use App\Enums\ServiceOrderStatus;
 use App\Enums\UserRole;
 use App\Mail\PlainNotificationMail;
+use App\Models\LandingBooster;
 use App\Models\Payment;
 use App\Models\ServiceOrder;
 use App\Models\User;
@@ -52,9 +53,21 @@ class OrderNotificationFlowTest extends TestCase
 
         $customer = $this->user(UserRole::Customer, 'cliente-wins-direto@horizonboost.gg');
         $booster = $this->user(UserRole::Booster, 'booster-wins-direto@horizonboost.gg');
+        LandingBooster::query()->create([
+            'user_id' => $booster->getKey(),
+            'nick' => 'Nome que não pode aparecer',
+            'champion_name' => 'Ahri',
+            'rank_label' => 'Diamante',
+            'rank_key' => 'diamond',
+            'game' => 'League of Legends',
+            'sort_order' => 1,
+            'is_active' => true,
+        ]);
         $this->getJson('/api/boosters/selectable')
             ->assertOk()
             ->assertJsonPath('data.boosters.0.id', $booster->getKey())
+            ->assertJsonPath('data.boosters.0.name', 'Ahri')
+            ->assertJsonMissing(['Nome que não pode aparecer'])
             ->assertJsonMissingPath('data.boosters.0.email')
             ->assertJsonMissingPath('data.boosters.0.effective_permissions');
         $response = $this->withHeader('Authorization', 'Bearer '.$this->token($customer))

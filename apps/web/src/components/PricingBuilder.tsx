@@ -1995,7 +1995,7 @@ export function PricingBuilder({
                     {selectableBoosters.map((booster) => (
                       <button className={`pricing-booster-option${selectedBoosterId === booster.id ? ' is-active' : ''}`} key={booster.id} onClick={() => setSelectedBoosterId(booster.id)} type="button">
                         <span className="pricing-booster-option__avatar">{booster.profile_photo_path ? <img alt="" src={booster.profile_photo_path} /> : <UserRound size={24} />}</span>
-                        <span><strong>{booster.name}</strong><small>{booster.booster_profile?.highest_rank ?? booster.booster_profile?.in_game_nick ?? 'Booster Horizon'}</small></span>
+                        <span><strong>{booster.name}</strong><small>{booster.booster_profile?.highest_rank ?? 'Booster Horizon'}</small></span>
                         {selectedBoosterId === booster.id ? <CheckCircle className="pricing-booster-option__check" size={20} /> : null}
                       </button>
                     ))}
