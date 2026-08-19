@@ -4,11 +4,13 @@ import { Eye, Loader2, ShoppingCart, UserRound, X } from 'lucide-react'
 import { AppShell } from '@/components/AppShell'
 import { ChatModal } from '@/components/chat/ChatModal'
 import { OrderChatButton } from '@/components/chat/OrderChatButton'
+import { PendingPixCart } from '@/components/payments/PendingPixCart'
 import { getApiErrorMessage } from '@/services/api/errors'
 import { authService } from '@/services/auth'
 import { systemService } from '@/services/system'
 import { useSessionStore } from '@/store/useSessionStore'
 import { useToastStore } from '@/store/useToastStore'
+import type { AuthUser } from '@/types/auth'
 import type { ServiceOrder } from '@/types/system'
 
 const rankLabels: Record<string, string> = {
@@ -171,10 +173,16 @@ export function OrdersPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [boosterFilter, setBoosterFilter] = useState('all')
   const [phaseFilter, setPhaseFilter] = useState('active')
+  const [boosters, setBoosters] = useState<AuthUser[]>([])
+  const [transferBoosterId, setTransferBoosterId] = useState('')
+  const [isManagingOrder, setIsManagingOrder] = useState(false)
   const isAdmin = user?.role === 'master_admin'
   const boosterOptions = useMemo(() => Array.from(
-    new Map(orders.filter((order) => order.booster).map((order) => [order.booster!.id, order.booster!])).values(),
-  ).sort((left, right) => left.name.localeCompare(right.name, 'pt-BR')), [orders])
+    new Map([
+      ...boosters.map((booster) => [booster.id, booster] as const),
+      ...orders.filter((order) => order.booster).map((order) => [order.booster!.id, order.booster!] as const),
+    ]).values(),
+  ).sort((left, right) => left.name.localeCompare(right.name, 'pt-BR')), [boosters, orders])
   const visibleOrders = useMemo(() => {
     if (!isAdmin) return orders
 
@@ -215,6 +223,15 @@ export function OrdersPage() {
     }
 
     void loadOrders()
+    if (isAdmin) {
+      void systemService.getUsers('booster').then((response) => {
+        if (active) setBoosters(response.users.data.filter((booster) => booster.is_active !== false))
+      }).catch(() => {
+        if (active) {
+          addToast({ tone: 'error', title: 'Boosters indisponíveis', description: 'Não foi possível carregar a lista para transferências.' })
+        }
+      })
+    }
     const intervalId = window.setInterval(() => {
       void loadOrders(true)
     }, TRACKER_REFRESH_MS)
@@ -223,7 +240,44 @@ export function OrdersPage() {
       active = false
       window.clearInterval(intervalId)
     }
-  }, [addToast])
+  }, [addToast, isAdmin])
+
+  function openOrderDetails(order: ServiceOrder) {
+    setSelectedOrder(order)
+    setTransferBoosterId(order.booster ? String(order.booster.id) : '')
+  }
+
+  async function transferOrder() {
+    if (!selectedOrder || !transferBoosterId) return
+    setIsManagingOrder(true)
+
+    try {
+      const updatedOrder = await systemService.transferOrder(selectedOrder.id, Number(transferBoosterId))
+      setOrders((current) => current.map((order) => order.id === updatedOrder.id ? updatedOrder : order))
+      setSelectedOrder(updatedOrder)
+      addToast({ tone: 'success', title: 'Pedido transferido', description: `O pedido #${updatedOrder.id} está com ${updatedOrder.booster?.name}.` })
+    } catch (error: unknown) {
+      addToast({ tone: 'error', title: 'Transferência não realizada', description: getApiErrorMessage(error, 'Revise o booster escolhido.') })
+    } finally {
+      setIsManagingOrder(false)
+    }
+  }
+
+  async function cancelOrder() {
+    if (!selectedOrder || !window.confirm(`Cancelar o pedido #${selectedOrder.id}? Isso encerra o serviço, mas não estorna pagamentos.`)) return
+    setIsManagingOrder(true)
+
+    try {
+      const updatedOrder = await systemService.cancelOrder(selectedOrder.id)
+      setOrders((current) => current.map((order) => order.id === updatedOrder.id ? updatedOrder : order))
+      setSelectedOrder(updatedOrder)
+      addToast({ tone: 'success', title: 'Pedido cancelado', description: `O pedido #${updatedOrder.id} foi encerrado.` })
+    } catch (error: unknown) {
+      addToast({ tone: 'error', title: 'Cancelamento não realizado', description: getApiErrorMessage(error, 'Tente novamente.') })
+    } finally {
+      setIsManagingOrder(false)
+    }
+  }
 
   async function handleLogout() {
     await authService.logout()
@@ -259,6 +313,8 @@ export function OrdersPage() {
               </label>
             </div>
           ) : null}
+
+          {!isAdmin ? <PendingPixCart orders={orders} /> : null}
 
           {isLoading ? (
             <div className="empty-state">
@@ -350,7 +406,7 @@ export function OrdersPage() {
                       </div>
 
                       <div className="client-order-card__actions">
-                        <button className="ghost-button" onClick={() => setSelectedOrder(order)} type="button">
+                        <button className="ghost-button" onClick={() => openOrderDetails(order)} type="button">
                           <Eye size={15} />
                           Detalhes
                         </button>
@@ -382,6 +438,41 @@ export function OrdersPage() {
               <div><span>Acompanhamento</span><strong>{trackerLabel(selectedOrder.tracker_status?.status)}</strong></div>
               <div><span>Criado em</span><strong>{formatDate(selectedOrder.created_at)}</strong></div>
             </div>
+            {isAdmin ? (
+              <div className="admin-order-actions">
+                <label>
+                  <span>Transferir para</span>
+                  <select
+                    disabled={isManagingOrder || !['BOOSTER_ASSIGNED', 'ASSIGNED', 'IN_PROGRESS'].includes(selectedOrder.status)}
+                    onChange={(event) => setTransferBoosterId(event.target.value)}
+                    value={transferBoosterId}
+                  >
+                    <option value="">Escolha um booster</option>
+                    {boosters.map((booster) => (
+                      <option key={booster.id} value={booster.id}>{booster.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <div>
+                  <button
+                    className="primary-button primary-button--crimson"
+                    disabled={isManagingOrder || !transferBoosterId || Number(transferBoosterId) === selectedOrder.booster?.id || !['BOOSTER_ASSIGNED', 'ASSIGNED', 'IN_PROGRESS'].includes(selectedOrder.status)}
+                    onClick={() => void transferOrder()}
+                    type="button"
+                  >
+                    Transferir pedido
+                  </button>
+                  <button
+                    className="ghost-button admin-order-actions__cancel"
+                    disabled={isManagingOrder || ['COMPLETED', 'CANCELLED', 'REFUNDED'].includes(selectedOrder.status) || ['WAITING_PAYMENT', 'PROCESSING', 'REQUIRES_ACTION'].includes(selectedOrder.payment_status ?? '')}
+                    onClick={() => void cancelOrder()}
+                    type="button"
+                  >
+                    Cancelar pedido
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </section>
         </div>
       ) : null}

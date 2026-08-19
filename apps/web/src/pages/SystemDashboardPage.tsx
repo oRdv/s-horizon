@@ -19,6 +19,7 @@ import { Link, useNavigate } from 'react-router-dom'
 
 import { AppShell } from '@/components/AppShell'
 import { TrackerDownloadGuide } from '@/components/booster/TrackerDownloadGuide'
+import { PendingPixCart } from '@/components/payments/PendingPixCart'
 import { getApiErrorMessage } from '@/services/api/errors'
 import { authService } from '@/services/auth'
 import { systemService, type LandingBoosterPayload, type RoleDashboard } from '@/services/system'
@@ -1006,6 +1007,28 @@ function BoosterDashboardView({ dashboard }: { dashboard: BoosterDashboard }) {
 }
 
 function CustomerDashboardView({ dashboard }: { dashboard: CustomerDashboard }) {
+  const addToast = useToastStore((state) => state.addToast)
+  const [pixOrder, setPixOrder] = useState<ServiceOrder | null>(null)
+  const [openingPixOrderId, setOpeningPixOrderId] = useState<number | null>(null)
+
+  async function openPix(order: ServiceOrder) {
+    if (openingPixOrderId !== null) return
+    setOpeningPixOrderId(order.id)
+
+    try {
+      await systemService.createPayment({ boostId: order.id, orderId: order.id, method: 'PIX' })
+      setPixOrder(await systemService.getOrder(order.id))
+    } catch (error: unknown) {
+      addToast({
+        tone: 'error',
+        title: 'Não foi possível abrir o PIX',
+        description: getApiErrorMessage(error, 'Tente novamente em instantes.'),
+      })
+    } finally {
+      setOpeningPixOrderId(null)
+    }
+  }
+
   return (
     <>
       <section className="system-card-grid system-card-grid--three">
@@ -1029,8 +1052,23 @@ function CustomerDashboardView({ dashboard }: { dashboard: CustomerDashboard }) 
 
           <div className="client-order-list">
             {dashboard.orders.length ? (
-              dashboard.orders.map((order) => (
-                <article className="client-dashboard-order" key={order.id}>
+              dashboard.orders.map((order) => {
+                const canOpenPix = order.payment_method === 'PIX' && ['WAITING_PAYMENT', 'PROCESSING', 'REQUIRES_ACTION', 'EXPIRED', 'FAILED'].includes(getOrderPaymentStatus(order))
+
+                return <article
+                  aria-busy={openingPixOrderId === order.id}
+                  className={`client-dashboard-order${canOpenPix ? ' is-clickable' : ''}`}
+                  key={order.id}
+                  onClick={canOpenPix ? () => void openPix(order) : undefined}
+                  onKeyDown={canOpenPix ? (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      void openPix(order)
+                    }
+                  } : undefined}
+                  role={canOpenPix ? 'button' : undefined}
+                  tabIndex={canOpenPix ? 0 : undefined}
+                >
                   <div className="client-dashboard-order__main">
                     <span className={`client-status-pill is-${statusTone(getOrderPaymentStatus(order))}`}>
                       {statusLabel(getOrderPaymentStatus(order))}
@@ -1049,7 +1087,7 @@ function CustomerDashboardView({ dashboard }: { dashboard: CustomerDashboard }) 
                     </div>
                   </div>
                 </article>
-              ))
+              })
             ) : (
               <div className="client-empty-state">
                 <ShoppingBag size={40} />
@@ -1099,6 +1137,14 @@ function CustomerDashboardView({ dashboard }: { dashboard: CustomerDashboard }) 
           </div>
         </article>
       </section>
+      {pixOrder ? (
+        <PendingPixCart
+          initialOrderId={pixOrder.id}
+          onClose={() => setPixOrder(null)}
+          orders={[pixOrder]}
+          showCart={false}
+        />
+      ) : null}
     </>
   )
 }

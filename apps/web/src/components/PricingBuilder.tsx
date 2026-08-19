@@ -734,7 +734,7 @@ function PaymentWizardModal(props: {
     requestAnimationFrame(() => modalRef.current?.focus())
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !isBusy) onClose()
+      if (event.key === 'Escape' && !isBusy && step !== 'pixQr') onClose()
     }
 
     document.addEventListener('keydown', handleKeyDown)
@@ -743,7 +743,7 @@ function PaymentWizardModal(props: {
       document.body.style.overflow = previousOverflow
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [isBusy, onClose, open])
+  }, [isBusy, onClose, open, step])
 
   useEffect(() => {
     if (!open) {
@@ -940,7 +940,10 @@ function PaymentWizardModal(props: {
       setCheckout({ gateway: normalizedGateway, order, transaction })
       setStatus(normalizedGateway.status ?? transaction.status ?? null)
       setCurrentTime(Date.now())
-      setPixCountdownEndsAt(method === 'PIX' ? Date.now() + pixCountdownDurationMs : null)
+      const gatewayExpiry = normalizedGateway.expiresAt ? Date.parse(normalizedGateway.expiresAt) : Number.NaN
+      setPixCountdownEndsAt(method === 'PIX'
+        ? (Number.isFinite(gatewayExpiry) ? gatewayExpiry : Date.now() + pixCountdownDurationMs)
+        : null)
       onOrderCreated?.({ order, transaction })
       setStep(method === 'PIX' ? 'pixQr' : 'card')
     } catch (requestError: unknown) {
@@ -963,14 +966,13 @@ function PaymentWizardModal(props: {
   }
 
   function handleGenerateNewPix() {
-    setOrder(null)
     setCheckout(null)
     setStatus(null)
     setQrCodeDataUrl(null)
     setPixCountdownEndsAt(null)
     setPollingError(null)
     createPaymentInFlightRef.current = false
-    setStep('pixConfirm')
+    void createProviderPayment('PIX')
   }
 
   function continueFromMethod() {
@@ -1027,7 +1029,7 @@ function PaymentWizardModal(props: {
   const methodLabel = selectedOption?.label ?? checkout?.transaction.method ?? 'Pagamento'
 
   const modalNode = (
-    <div className="modal-backdrop" onMouseDown={isBusy ? undefined : onClose}>
+    <div className="modal-backdrop" onMouseDown={isBusy || step === 'pixQr' ? undefined : onClose}>
       <section
         aria-labelledby="payment-wizard-title"
         aria-modal="true"

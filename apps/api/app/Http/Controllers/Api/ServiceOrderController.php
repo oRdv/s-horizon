@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\PaymentStatus;
 use App\Enums\ServiceOrderStatus;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Models\BoosterTrackerSession;
+use App\Models\Payment;
 use App\Models\ServiceOrder;
 use App\Models\User;
 use App\Services\Notifications\OrderNotificationService;
@@ -15,6 +18,7 @@ use App\Services\Audit\AccountAuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class ServiceOrderController extends Controller
@@ -172,6 +176,115 @@ class ServiceOrderController extends Controller
         ]);
     }
 
+    public function transfer(
+        Request $request,
+        ServiceOrder $serviceOrder,
+        AccountAuditService $audit,
+        OrderChatService $chat,
+        OrderNotificationService $notifications,
+    ): JsonResponse {
+        /** @var User $user */
+        $user = $request->user();
+        $validated = $request->validate(['booster_id' => ['required', 'integer', 'exists:users,id']]);
+        $booster = User::query()->findOrFail($validated['booster_id']);
+
+        if (! $booster->hasRole(UserRole::Booster) || ! $booster->is_active) {
+            throw ValidationException::withMessages(['booster_id' => 'Escolha um booster ativo.']);
+        }
+
+        if (! $serviceOrder->booster_id || (int) $serviceOrder->booster_id === (int) $booster->getKey()) {
+            throw ValidationException::withMessages(['booster_id' => 'Escolha outro booster para a transferência.']);
+        }
+
+        if (! in_array($serviceOrder->status, [
+            ServiceOrderStatus::BoosterAssigned->value,
+            ServiceOrderStatus::Assigned->value,
+            ServiceOrderStatus::InProgress->value,
+        ], true)) {
+            throw ValidationException::withMessages(['order' => 'Esse pedido não pode ser transferido nesse status.']);
+        }
+
+        $previousBoosterId = (int) $serviceOrder->booster_id;
+
+        DB::transaction(function () use ($booster, $serviceOrder): void {
+            BoosterTrackerSession::query()
+                ->where('service_order_id', $serviceOrder->getKey())
+                ->whereNull('ended_at')
+                ->update(['status' => 'OFFLINE', 'ended_at' => now(), 'last_heartbeat_at' => now()]);
+
+            $serviceOrder->forceFill([
+                'booster_id' => $booster->getKey(),
+                'status' => ServiceOrderStatus::BoosterAssigned->value,
+            ])->save();
+        });
+
+        $chat->ensureConversation($serviceOrder->refresh());
+        $audit->record('orders.transferred_by_master', $serviceOrder->customer, $user, $request, $serviceOrder, [
+            'from_booster_id' => $previousBoosterId,
+            'to_booster_id' => $booster->getKey(),
+        ]);
+        $notifications->assigned($serviceOrder->refresh()->loadMissing(['customer', 'booster']));
+
+        return response()->json([
+            'message' => 'Pedido transferido com sucesso.',
+            'data' => ['order' => $this->serializeOrder($serviceOrder->refresh()->loadMissing([
+                'customer:id,name,email,role,profile_photo_path',
+                'booster:id,name,email,role,profile_photo_path',
+                'payments',
+                'conversation',
+                'latestTrackerSession',
+            ]), $chat)],
+        ]);
+    }
+
+    public function cancel(
+        Request $request,
+        ServiceOrder $serviceOrder,
+        AccountAuditService $audit,
+        OrderChatService $chat,
+    ): JsonResponse {
+        /** @var User $user */
+        $user = $request->user();
+
+        if (in_array($serviceOrder->status, [
+            ServiceOrderStatus::Completed->value,
+            ServiceOrderStatus::Cancelled->value,
+            ServiceOrderStatus::Refunded->value,
+        ], true)) {
+            throw ValidationException::withMessages(['order' => 'Esse pedido não pode ser cancelado nesse status.']);
+        }
+
+        if ($serviceOrder->payments()->whereIn('status', [
+            PaymentStatus::WaitingPayment->value,
+            PaymentStatus::Processing->value,
+            PaymentStatus::RequiresAction->value,
+        ])->exists()) {
+            throw ValidationException::withMessages(['order' => 'Aguarde ou expire o pagamento ativo antes de cancelar o pedido.']);
+        }
+
+        DB::transaction(function () use ($serviceOrder): void {
+            BoosterTrackerSession::query()
+                ->where('service_order_id', $serviceOrder->getKey())
+                ->whereNull('ended_at')
+                ->update(['status' => 'OFFLINE', 'ended_at' => now(), 'last_heartbeat_at' => now()]);
+
+            $serviceOrder->forceFill(['status' => ServiceOrderStatus::Cancelled->value])->save();
+        });
+
+        $audit->record('orders.cancelled_by_master', $serviceOrder->customer, $user, $request, $serviceOrder);
+
+        return response()->json([
+            'message' => 'Pedido cancelado com sucesso.',
+            'data' => ['order' => $this->serializeOrder($serviceOrder->refresh()->loadMissing([
+                'customer:id,name,email,role,profile_photo_path',
+                'booster:id,name,email,role,profile_photo_path',
+                'payments',
+                'conversation',
+                'latestTrackerSession',
+            ]), $chat)],
+        ]);
+    }
+
     public function storeGameAccount(
         Request $request,
         ServiceOrder $serviceOrder,
@@ -227,7 +340,8 @@ class ServiceOrderController extends Controller
 
     private function serializeOrder(ServiceOrder $order, OrderChatService $chat): array
     {
-        $latestPayment = $order->payments->sortByDesc('created_at')->first();
+        $payments = $order->payments->sortByDesc('created_at')->values();
+        $latestPayment = $payments->first();
         $metadata = $order->metadata ?? [];
         $hasGameAccount = filled(data_get($metadata, 'game_account.email')) && filled(data_get($metadata, 'game_account.password_encrypted'));
 
@@ -256,7 +370,10 @@ class ServiceOrderController extends Controller
             'completed_at' => $order->completed_at?->toIso8601String(),
             'chat_available' => $chat->isChatAvailable($order),
             'conversation_id' => $order->conversation?->getKey(),
-            'latest_payment' => $latestPayment,
+            'latest_payment' => $latestPayment ? $this->serializePayment($latestPayment) : null,
+            'payments' => $payments
+                ->map(fn (Payment $payment): array => $this->serializePayment($payment))
+                ->all(),
             'tracker_status' => $order->latestTrackerSession ? [
                 'id' => $order->latestTrackerSession->getKey(),
                 'status' => $order->latestTrackerSession->status,
@@ -279,6 +396,41 @@ class ServiceOrderController extends Controller
                     'progressPercent' => (float) $order->latestTrackerSession->progress_percent,
                 ],
             ] : null,
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function serializePayment(Payment $payment): array
+    {
+        $expiresAt = $payment->expires_at;
+
+        // Older PIX records stored Sao Paulo wall time as UTC. Their real expiry is 30 minutes after creation.
+        if ($payment->method === 'PIX' && $expiresAt && $payment->created_at && $expiresAt->lt($payment->created_at)) {
+            $expiresAt = $payment->created_at->copy()->addMinutes(30);
+        }
+
+        return [
+            'id' => $payment->getKey(),
+            'paymentId' => $payment->getKey(),
+            'orderId' => $payment->order_id,
+            'boostId' => $payment->boost_id,
+            'provider' => $payment->provider,
+            'method' => $payment->method,
+            'status' => $payment->status,
+            'amount' => $payment->amount,
+            'baseAmount' => $payment->base_amount,
+            'feeAmount' => $payment->fee_amount,
+            'discountAmount' => $payment->discount_amount,
+            'finalAmount' => $payment->final_amount,
+            'currency' => $payment->currency,
+            'qrCode' => $payment->qr_code,
+            'qrCodeBase64' => $payment->qr_code_base64,
+            'pixCopyPaste' => $payment->pix_copy_paste,
+            'expiresAt' => $expiresAt?->toIso8601String(),
+            'createdAt' => $payment->created_at?->toIso8601String(),
+            'updatedAt' => $payment->updated_at?->toIso8601String(),
         ];
     }
 

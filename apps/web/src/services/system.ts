@@ -240,6 +240,21 @@ export const systemService = {
     return response.data.data.order
   },
 
+  async transferOrder(orderId: number, boosterId: number): Promise<ServiceOrder> {
+    const response = await apiClient.patch<DashboardResponse<{ order: ServiceOrder }>>(
+      `/orders/${orderId}/transfer`,
+      { booster_id: boosterId },
+    )
+
+    return response.data.data.order
+  },
+
+  async cancelOrder(orderId: number): Promise<ServiceOrder> {
+    const response = await apiClient.patch<DashboardResponse<{ order: ServiceOrder }>>(`/orders/${orderId}/cancel`)
+
+    return response.data.data.order
+  },
+
   async getOrderTrackerStatus(orderId: number): Promise<BoosterTrackerStatusResponse> {
     const response = await apiClient.get<DashboardResponse<BoosterTrackerStatusResponse>>(
       `/booster-tracker/orders/${orderId}/status`,

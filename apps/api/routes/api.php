@@ -120,6 +120,10 @@ Route::middleware('auth.jwt')->group(function (): void {
         Route::post('/{serviceOrder}/game-account', [ServiceOrderController::class, 'storeGameAccount']);
         Route::post('/{serviceOrder}/claim', [ServiceOrderController::class, 'claim']);
         Route::post('/{serviceOrder}/complete', [ServiceOrderController::class, 'complete']);
+        Route::patch('/{serviceOrder}/transfer', [ServiceOrderController::class, 'transfer'])
+            ->middleware('role:master_admin');
+        Route::patch('/{serviceOrder}/cancel', [ServiceOrderController::class, 'cancel'])
+            ->middleware('role:master_admin');
     });
 
     Route::prefix('conversations')->group(function (): void {

@@ -21,8 +21,10 @@ final class MercadoPagoPaymentProvider
             throw new PaymentConfigurationException('Mercado Pago nao configurado: defina MERCADO_PAGO_ACCESS_TOKEN no backend.');
         }
 
-        $expiresAt = Carbon::now('America/Sao_Paulo')->addMinutes(30);
-        $dateOfExpiration = $expiresAt->format('Y-m-d\TH:i:s.000P');
+        $expiresAt = Carbon::now()->addMinutes(30);
+        $dateOfExpiration = $expiresAt->copy()
+            ->setTimezone('America/Sao_Paulo')
+            ->format('Y-m-d\TH:i:s.000P');
 
         $transactionAmount = $this->providerAmount($payment->final_amount);
         if ($transactionAmount < 1) {

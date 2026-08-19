@@ -10,6 +10,7 @@ use App\Enums\ServiceOrderStatus;
 use App\Enums\StaffProfile;
 use App\Enums\UserRole;
 use App\Models\AccountSecurityToken;
+use App\Models\Payment;
 use App\Models\RefreshToken;
 use App\Models\ServiceOrder;
 use App\Models\User;
@@ -54,6 +55,58 @@ class MvpCriticalFlowTest extends TestCase
         $this->withHeader('Authorization', 'Bearer '.$this->loginToken($customer))
             ->postJson('/api/orders/'.$order->getKey().'/chat/messages', ['body' => 'Mensagem tardia do cliente.'])
             ->assertUnprocessable();
+    }
+
+    public function test_only_master_admin_can_transfer_and_cancel_orders(): void
+    {
+        $customer = $this->user(UserRole::Customer, 'cliente-gestao-pedido@horizonboost.gg');
+        $firstBooster = $this->user(UserRole::Booster, 'booster-origem@horizonboost.gg');
+        $nextBooster = $this->user(UserRole::Booster, 'booster-destino@horizonboost.gg');
+        $staff = $this->user(UserRole::Staff, 'staff-sem-transferencia@horizonboost.gg');
+        $master = $this->user(UserRole::MasterAdmin, 'master-gestao-pedido@horizonboost.gg');
+        $order = ServiceOrder::query()->create([
+            'customer_id' => $customer->getKey(),
+            'booster_id' => $firstBooster->getKey(),
+            'service_type' => 'solo_boost',
+            'title' => 'Pedido transferível',
+            'status' => ServiceOrderStatus::InProgress->value,
+            'payment_status' => PaymentStatus::Paid->value,
+            'price' => 120,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->loginToken($staff))
+            ->patchJson('/api/orders/'.$order->getKey().'/transfer', ['booster_id' => $nextBooster->getKey()])
+            ->assertForbidden();
+
+        $masterToken = $this->loginToken($master);
+        $this->withHeader('Authorization', 'Bearer '.$masterToken)
+            ->patchJson('/api/orders/'.$order->getKey().'/transfer', ['booster_id' => $nextBooster->getKey()])
+            ->assertOk()
+            ->assertJsonPath('data.order.booster.id', $nextBooster->getKey())
+            ->assertJsonPath('data.order.status', ServiceOrderStatus::BoosterAssigned->value);
+
+        $this->assertDatabaseHas('order_conversations', [
+            'service_order_id' => $order->getKey(),
+            'booster_id' => $nextBooster->getKey(),
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->loginToken($customer))
+            ->patchJson('/api/orders/'.$order->getKey().'/cancel')
+            ->assertForbidden();
+
+        $this->withHeader('Authorization', 'Bearer '.$masterToken)
+            ->patchJson('/api/orders/'.$order->getKey().'/cancel')
+            ->assertOk()
+            ->assertJsonPath('data.order.status', ServiceOrderStatus::Cancelled->value);
+
+        $this->assertDatabaseHas('account_audit_logs', [
+            'action' => 'orders.transferred_by_master',
+            'auditable_id' => $order->getKey(),
+        ]);
+        $this->assertDatabaseHas('account_audit_logs', [
+            'action' => 'orders.cancelled_by_master',
+            'auditable_id' => $order->getKey(),
+        ]);
     }
 
     public function test_customer_pix_checkout_webhook_booster_claim_game_account_and_chat_flow(): void
@@ -188,6 +241,83 @@ class MvpCriticalFlowTest extends TestCase
         $metadata = ServiceOrder::query()->findOrFail($orderId)->metadata;
         $this->assertSame('conta-lol@example.com', data_get($metadata, 'game_account.email'));
         $this->assertNotEmpty(data_get($metadata, 'game_account.password_encrypted'));
+    }
+
+    public function test_customer_can_resume_pix_and_generate_another_for_the_same_order_after_expiration(): void
+    {
+        config([
+            'payments.backend_url' => 'https://api.horizonboost.test',
+            'services.mercado_pago.access_token' => 'TEST_MP_TOKEN',
+        ]);
+
+        Http::fake([
+            'https://api.mercadopago.com/v1/payments' => Http::sequence()->push([
+                'id' => 'mp_pix_resume',
+                'status' => 'pending',
+                'point_of_interaction' => [
+                    'transaction_data' => [
+                        'qr_code' => 'PIX-RETOMAVEL',
+                        'qr_code_base64' => 'base64-retomavel',
+                    ],
+                ],
+            ], 201)->push([
+                'id' => 'mp_pix_renewed',
+                'status' => 'pending',
+                'point_of_interaction' => [
+                    'transaction_data' => [
+                        'qr_code' => 'PIX-RENOVADO',
+                        'qr_code_base64' => 'base64-renovado',
+                    ],
+                ],
+            ], 201),
+        ]);
+
+        $customer = $this->user(UserRole::Customer, 'cliente-retoma-pix@horizonboost.gg');
+        $token = $this->loginToken($customer);
+        $orderId = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/payments/customer', [
+                'service_type' => 'solo_boost',
+                'title' => 'PIX retomável',
+                'amount' => 14800,
+            ])
+            ->assertCreated()
+            ->json('data.order.id');
+
+        $payload = [
+            'boostId' => $orderId,
+            'orderId' => $orderId,
+            'method' => PaymentMethod::Pix->value,
+        ];
+        $paymentId = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/payments/create', $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.pixCopyPaste', 'PIX-RETOMAVEL')
+            ->json('data.payment.id');
+
+        $this->assertTrue(Payment::query()->findOrFail($paymentId)->expires_at->isFuture());
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/orders')
+            ->assertOk()
+            ->assertJsonPath('data.orders.0.latest_payment.id', $paymentId)
+            ->assertJsonPath('data.orders.0.latest_payment.pixCopyPaste', 'PIX-RETOMAVEL')
+            ->assertJsonCount(1, 'data.orders.0.payments');
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/payments/create', $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.payment.id', $paymentId);
+
+        Payment::query()->findOrFail($paymentId)->forceFill(['expires_at' => now()->subMinute()])->save();
+
+        $newPaymentId = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/payments/create', $payload)
+            ->assertCreated()
+            ->json('data.payment.id');
+
+        $this->assertNotSame($paymentId, $newPaymentId);
+        $this->assertDatabaseHas('payments', ['id' => $paymentId, 'status' => PaymentStatus::Expired->value]);
+        $this->assertSame(2, Payment::query()->where('order_id', $orderId)->count());
     }
 
     public function test_stripe_card_payment_rejects_invalid_webhook_and_marks_paid_with_valid_signature(): void

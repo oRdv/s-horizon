@@ -355,8 +355,6 @@ const eloHighBoostStepPrices: Partial<Record<string, number>> = {
   grandmaster: 2500,
 }
 
-const eloHighQuoteDiscount = 50
-
 const eloHighBoostStepDays: Partial<Record<string, number>> = {
   iron: 1,
   bronze: 1,
@@ -489,9 +487,6 @@ export function createBoostQuote(input: {
     minTotal += stepPrice
     maxTotal += stepPrice
   }
-
-  minTotal = minTotal > eloHighQuoteDiscount ? minTotal - eloHighQuoteDiscount : minTotal
-  maxTotal = maxTotal > eloHighQuoteDiscount ? maxTotal - eloHighQuoteDiscount : maxTotal
 
   const divisionCount = targetIndex - startIndex
   const touchesApex = isApexTier(input.currentTier) || isApexTier(input.targetTier)
