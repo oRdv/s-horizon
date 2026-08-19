@@ -1,0 +1,16 @@
+HTTP/1.1 401 Unauthorized
+Date: Sat, 27 Jun 2026 20:01:47 GMT
+Content-Type: application/json
+Transfer-Encoding: chunked
+Connection: keep-alive
+Vary: Accept-Encoding
+X-Powered-By: PHP/8.3.30
+Cache-Control: no-cache, private
+platform: hostinger
+panel: hpanel
+Content-Security-Policy: upgrade-insecure-requests
+Server: hcdn
+alt-svc: h3=":443"; ma=86400
+x-hcdn-request-id: 73627750c8eb65ef9110a7d9c39f7c10-asc-edge10
+
+{"message":"O access token n\u00e3o foi informado."}

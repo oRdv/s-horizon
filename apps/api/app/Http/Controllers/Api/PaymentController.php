@@ -7,6 +7,7 @@ use App\Enums\PaymentStatus;
 use App\Enums\ServiceOrderStatus;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Models\LandingBooster;
 use App\Models\Payment;
 use App\Models\ServiceOrder;
 use App\Models\User;
@@ -221,6 +222,12 @@ class PaymentController extends Controller
         MercadoPagoPaymentProvider $mercadoPago,
     ): JsonResponse {
         if (! $this->isValidMercadoPagoSignature($request)) {
+            Log::warning('payments.mercado_pago_webhook_signature_invalid', [
+                'has_signature' => $request->hasHeader('x-signature'),
+                'has_request_id' => $request->hasHeader('x-request-id'),
+                'data_id' => $request->input('data.id') ?? $request->query('data.id') ?? $request->query('id'),
+            ]);
+
             return $this->error('Assinatura Mercado Pago invalida.', 400);
         }
 
@@ -268,10 +275,44 @@ class PaymentController extends Controller
             'description' => ['nullable', 'string'],
             'amount' => ['required', 'integer', 'min:1'],
             'metadata' => ['nullable', 'array'],
+            'booster_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('users', 'id')->where(fn ($query) => $query
+                    ->where('role', UserRole::Booster->value)
+                    ->where('is_active', true)),
+            ],
         ]);
+
+        if (filled($validated['booster_id'] ?? null) && $validated['service_type'] !== 'wins_by_rank') {
+            return $this->error('A seleção direta de booster está disponível apenas para pacotes de vitórias.', 422, 'BOOSTER_SELECTION_INVALID');
+        }
+
+        $metadata = $validated['metadata'] ?? [];
+        if (filled($validated['booster_id'] ?? null)) {
+            $gameLabel = match (data_get($metadata, 'game')) {
+                'lol' => 'League of Legends',
+                'wild_rift' => 'Wild Rift',
+                default => null,
+            };
+
+            if (! $gameLabel || ! LandingBooster::query()
+                ->where('user_id', $validated['booster_id'])
+                ->where('game', $gameLabel)
+                ->where('is_active', true)
+                ->exists()) {
+                return $this->error('O booster selecionado não atende ao jogo escolhido.', 422, 'BOOSTER_GAME_MISMATCH');
+            }
+
+            data_set($metadata, 'assignment', [
+                'source' => 'customer_selection',
+                'booster_id' => (int) $validated['booster_id'],
+            ]);
+        }
 
         $order = ServiceOrder::query()->create([
             'customer_id' => $user->getKey(),
+            'booster_id' => $validated['booster_id'] ?? null,
             'created_by' => $user->getKey(),
             'service_type' => $validated['service_type'],
             'title' => $validated['title'],
@@ -281,7 +322,7 @@ class PaymentController extends Controller
             'base_price' => $validated['amount'],
             'final_price' => $validated['amount'],
             'currency' => 'BRL',
-            'metadata' => $validated['metadata'] ?? [],
+            'metadata' => $metadata,
             'purchased_at' => now(),
         ]);
 

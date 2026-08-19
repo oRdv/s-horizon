@@ -56,6 +56,14 @@ export const systemService = {
     return response.data.data
   },
 
+  async getSelectableBoosters(game: 'lol' | 'wild_rift'): Promise<AuthUser[]> {
+    const response = await apiClient.get<DashboardResponse<{ boosters: AuthUser[] }>>('/boosters/selectable', {
+      params: { game },
+    })
+
+    return response.data.data.boosters
+  },
+
   async createLandingBooster(payload: LandingBoosterPayload): Promise<LandingBooster> {
     const response = await apiClient.post<DashboardResponse<{ booster: LandingBooster }>>('/admin/landing-boosters', payload)
 
@@ -187,6 +195,7 @@ export const systemService = {
     description?: string
     amount: number
     metadata?: Record<string, unknown>
+    booster_id?: number
   }): Promise<{ order: ServiceOrder }> {
     const response = await apiClient.post<DashboardResponse<{ order: ServiceOrder }>>('/payments/customer', payload)
 
@@ -227,6 +236,21 @@ export const systemService = {
 
   async getOrder(orderId: number): Promise<ServiceOrder> {
     const response = await apiClient.get<DashboardResponse<{ order: ServiceOrder }>>(`/orders/${orderId}`)
+
+    return response.data.data.order
+  },
+
+  async transferOrder(orderId: number, boosterId: number): Promise<ServiceOrder> {
+    const response = await apiClient.patch<DashboardResponse<{ order: ServiceOrder }>>(
+      `/orders/${orderId}/transfer`,
+      { booster_id: boosterId },
+    )
+
+    return response.data.data.order
+  },
+
+  async cancelOrder(orderId: number): Promise<ServiceOrder> {
+    const response = await apiClient.patch<DashboardResponse<{ order: ServiceOrder }>>(`/orders/${orderId}/cancel`)
 
     return response.data.data.order
   },
@@ -280,6 +304,18 @@ export const systemService = {
     )
 
     return response.data.data.boosters
+  },
+
+  async getAdminPricing(): Promise<any> {
+    const response = await apiClient.get<DashboardResponse<{ pricing: any }>>('/admin/pricing')
+
+    return response.data.data.pricing
+  },
+
+  async updateAdminPricing(pricing: any): Promise<any> {
+    const response = await apiClient.put<DashboardResponse<{ pricing: any }>>('/admin/pricing', { pricing })
+
+    return response.data.data.pricing
   },
 
   async saveOrderGameAccount(orderId: number, payload: { email: string; password: string }): Promise<ServiceOrder> {

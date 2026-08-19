@@ -67,6 +67,14 @@ export function AppShell({ userName, onLogout, children }: AppShellProps) {
               Usuários
             </NavLink>
           ) : null}
+          {hasPermission(user, 'users.view_all') ? (
+            <NavLink
+              to="/admin/pricing"
+              className={({ isActive }) => `dashboard-shell__nav-link${isActive ? ' is-active' : ''}`}
+            >
+              Preços
+            </NavLink>
+          ) : null}
           {user?.role === 'customer' || user?.role === 'booster' ? (
             <>
               <NavLink
@@ -84,6 +92,14 @@ export function AppShell({ userName, onLogout, children }: AppShellProps) {
                 </NavLink>
               ) : null}
             </>
+          ) : null}
+          {user?.role === 'master_admin' ? (
+            <NavLink
+              to="/orders"
+              className={({ isActive }) => `dashboard-shell__nav-link${isActive ? ' is-active' : ''}`}
+            >
+              Pedidos e chats
+            </NavLink>
           ) : null}
           {user?.role === 'booster' ? (
             <NavLink

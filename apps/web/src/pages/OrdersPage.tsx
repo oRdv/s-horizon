@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Eye, Loader2, ShoppingCart, UserRound, X } from 'lucide-react'
 
 import { AppShell } from '@/components/AppShell'
 import { ChatModal } from '@/components/chat/ChatModal'
 import { OrderChatButton } from '@/components/chat/OrderChatButton'
+import { PendingPixCart } from '@/components/payments/PendingPixCart'
 import { getApiErrorMessage } from '@/services/api/errors'
 import { authService } from '@/services/auth'
 import { systemService } from '@/services/system'
 import { useSessionStore } from '@/store/useSessionStore'
 import { useToastStore } from '@/store/useToastStore'
+import type { AuthUser } from '@/types/auth'
 import type { ServiceOrder } from '@/types/system'
 
 const rankLabels: Record<string, string> = {
@@ -169,6 +171,31 @@ export function OrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null)
   const [chatOrder, setChatOrder] = useState<ServiceOrder | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [boosterFilter, setBoosterFilter] = useState('all')
+  const [phaseFilter, setPhaseFilter] = useState('active')
+  const [boosters, setBoosters] = useState<AuthUser[]>([])
+  const [transferBoosterId, setTransferBoosterId] = useState('')
+  const [isManagingOrder, setIsManagingOrder] = useState(false)
+  const isAdmin = user?.role === 'master_admin'
+  const boosterOptions = useMemo(() => Array.from(
+    new Map([
+      ...boosters.map((booster) => [booster.id, booster] as const),
+      ...orders.filter((order) => order.booster).map((order) => [order.booster!.id, order.booster!] as const),
+    ]).values(),
+  ).sort((left, right) => left.name.localeCompare(right.name, 'pt-BR')), [boosters, orders])
+  const visibleOrders = useMemo(() => {
+    if (!isAdmin) return orders
+
+    return orders
+      .filter((order) => {
+        if (boosterFilter === 'unassigned' && order.booster) return false
+        if (boosterFilter !== 'all' && boosterFilter !== 'unassigned' && String(order.booster?.id) !== boosterFilter) return false
+        if (phaseFilter === 'completed') return order.status === 'COMPLETED'
+        if (phaseFilter === 'active') return !['COMPLETED', 'CANCELLED', 'FAILED', 'EXPIRED', 'REFUNDED'].includes(order.status)
+        return true
+      })
+      .sort((left, right) => (left.booster?.name ?? 'Sem booster').localeCompare(right.booster?.name ?? 'Sem booster', 'pt-BR'))
+  }, [boosterFilter, isAdmin, orders, phaseFilter])
 
   useEffect(() => {
     let active = true
@@ -196,6 +223,15 @@ export function OrdersPage() {
     }
 
     void loadOrders()
+    if (isAdmin) {
+      void systemService.getUsers('booster').then((response) => {
+        if (active) setBoosters(response.users.data.filter((booster) => booster.is_active !== false))
+      }).catch(() => {
+        if (active) {
+          addToast({ tone: 'error', title: 'Boosters indisponíveis', description: 'Não foi possível carregar a lista para transferências.' })
+        }
+      })
+    }
     const intervalId = window.setInterval(() => {
       void loadOrders(true)
     }, TRACKER_REFRESH_MS)
@@ -204,21 +240,81 @@ export function OrdersPage() {
       active = false
       window.clearInterval(intervalId)
     }
-  }, [addToast])
+  }, [addToast, isAdmin])
+
+  function openOrderDetails(order: ServiceOrder) {
+    setSelectedOrder(order)
+    setTransferBoosterId(order.booster ? String(order.booster.id) : '')
+  }
+
+  async function transferOrder() {
+    if (!selectedOrder || !transferBoosterId) return
+    setIsManagingOrder(true)
+
+    try {
+      const updatedOrder = await systemService.transferOrder(selectedOrder.id, Number(transferBoosterId))
+      setOrders((current) => current.map((order) => order.id === updatedOrder.id ? updatedOrder : order))
+      setSelectedOrder(updatedOrder)
+      addToast({ tone: 'success', title: 'Pedido transferido', description: `O pedido #${updatedOrder.id} está com ${updatedOrder.booster?.name}.` })
+    } catch (error: unknown) {
+      addToast({ tone: 'error', title: 'Transferência não realizada', description: getApiErrorMessage(error, 'Revise o booster escolhido.') })
+    } finally {
+      setIsManagingOrder(false)
+    }
+  }
+
+  async function cancelOrder() {
+    if (!selectedOrder || !window.confirm(`Cancelar o pedido #${selectedOrder.id}? Isso encerra o serviço, mas não estorna pagamentos.`)) return
+    setIsManagingOrder(true)
+
+    try {
+      const updatedOrder = await systemService.cancelOrder(selectedOrder.id)
+      setOrders((current) => current.map((order) => order.id === updatedOrder.id ? updatedOrder : order))
+      setSelectedOrder(updatedOrder)
+      addToast({ tone: 'success', title: 'Pedido cancelado', description: `O pedido #${updatedOrder.id} foi encerrado.` })
+    } catch (error: unknown) {
+      addToast({ tone: 'error', title: 'Cancelamento não realizado', description: getApiErrorMessage(error, 'Tente novamente.') })
+    } finally {
+      setIsManagingOrder(false)
+    }
+  }
 
   async function handleLogout() {
     await authService.logout()
   }
 
   return (
-    <AppShell userName={user?.name || 'Cliente'} onLogout={handleLogout}>
+    <AppShell userName={user?.name || (isAdmin ? 'Admin' : 'Cliente')} onLogout={handleLogout}>
       <div className="purchases-page">
         <section className="purchase-section purchases-content" id="meus-pedidos">
           <div className="section-heading">
-            <span className="panel__eyebrow">Área do cliente</span>
-            <h2>Meus pedidos</h2>
-            <p>Acompanhe seus pedidos, pagamentos e conversas em um só lugar.</p>
+            <span className="panel__eyebrow">{isAdmin ? 'Operação' : 'Área do cliente'}</span>
+            <h2>{isAdmin ? 'Pedidos e chats' : 'Meus pedidos'}</h2>
+            <p>{isAdmin ? 'Acompanhe os serviços por booster e participe das conversas.' : 'Acompanhe seus pedidos, pagamentos e conversas em um só lugar.'}</p>
           </div>
+
+          {isAdmin ? (
+            <div className="admin-order-filters">
+              <label>
+                <span>Situação</span>
+                <select value={phaseFilter} onChange={(event) => setPhaseFilter(event.target.value)}>
+                  <option value="active">Em andamento</option>
+                  <option value="completed">Concluídos</option>
+                  <option value="all">Todos</option>
+                </select>
+              </label>
+              <label>
+                <span>Booster</span>
+                <select value={boosterFilter} onChange={(event) => setBoosterFilter(event.target.value)}>
+                  <option value="all">Todos os boosters</option>
+                  <option value="unassigned">Sem booster</option>
+                  {boosterOptions.map((booster) => <option key={booster.id} value={booster.id}>{booster.name}</option>)}
+                </select>
+              </label>
+            </div>
+          ) : null}
+
+          {!isAdmin ? <PendingPixCart orders={orders} /> : null}
 
           {isLoading ? (
             <div className="empty-state">
@@ -229,16 +325,31 @@ export function OrdersPage() {
             <div className="empty-state">
               <ShoppingCart size={64} />
               <h3>Nenhum pedido ainda</h3>
-              <p>Monte seu primeiro pedido em Preços para acompanhar tudo por aqui.</p>
+              <p>{isAdmin ? 'Ainda não existem pedidos na plataforma.' : 'Monte seu primeiro pedido em Preços para acompanhar tudo por aqui.'}</p>
+            </div>
+          ) : visibleOrders.length === 0 ? (
+            <div className="empty-state">
+              <ShoppingCart size={64} />
+              <h3>Nenhum pedido neste filtro</h3>
+              <p>Altere a situação ou o booster para consultar outros pedidos.</p>
             </div>
           ) : (
             <div className="orders-grid">
-              {orders.map((order) => {
+              {visibleOrders.map((order, index) => {
                 const route = routeLabel(order)
                 const amount = order.final_price ?? order.latest_payment?.finalAmount ?? order.latest_payment?.amount ?? order.price
+                const boosterName = order.booster?.name ?? 'Sem booster designado'
+                const previousBooster = visibleOrders[index - 1]?.booster?.name ?? 'Sem booster designado'
 
                 return (
-                  <article key={order.id} className="client-order-card">
+                  <Fragment key={order.id}>
+                    {isAdmin && (index === 0 || boosterName !== previousBooster) ? (
+                      <div className="admin-order-group-title">
+                        <UserRound size={18} />
+                        <strong>{boosterName}</strong>
+                      </div>
+                    ) : null}
+                  <article className="client-order-card">
                     <div className="client-order-card__top">
                       <div>
                         <span>Pedido #{order.id}</span>
@@ -280,6 +391,7 @@ export function OrdersPage() {
                         <span>Acompanhamento</span>
                         <strong>{trackerLabel(order.tracker_status?.status)}</strong>
                       </div>
+                      {isAdmin ? <div><span>Cliente</span><strong>{order.customer?.name ?? 'Cliente removido'}</strong></div> : null}
                     </div>
 
                     <div className="client-order-card__footer">
@@ -294,7 +406,7 @@ export function OrdersPage() {
                       </div>
 
                       <div className="client-order-card__actions">
-                        <button className="ghost-button" onClick={() => setSelectedOrder(order)} type="button">
+                        <button className="ghost-button" onClick={() => openOrderDetails(order)} type="button">
                           <Eye size={15} />
                           Detalhes
                         </button>
@@ -302,6 +414,7 @@ export function OrdersPage() {
                       </div>
                     </div>
                   </article>
+                  </Fragment>
                 )
               })}
             </div>
@@ -325,6 +438,41 @@ export function OrdersPage() {
               <div><span>Acompanhamento</span><strong>{trackerLabel(selectedOrder.tracker_status?.status)}</strong></div>
               <div><span>Criado em</span><strong>{formatDate(selectedOrder.created_at)}</strong></div>
             </div>
+            {isAdmin ? (
+              <div className="admin-order-actions">
+                <label>
+                  <span>Transferir para</span>
+                  <select
+                    disabled={isManagingOrder || !['BOOSTER_ASSIGNED', 'ASSIGNED', 'IN_PROGRESS'].includes(selectedOrder.status)}
+                    onChange={(event) => setTransferBoosterId(event.target.value)}
+                    value={transferBoosterId}
+                  >
+                    <option value="">Escolha um booster</option>
+                    {boosters.map((booster) => (
+                      <option key={booster.id} value={booster.id}>{booster.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <div>
+                  <button
+                    className="primary-button primary-button--crimson"
+                    disabled={isManagingOrder || !transferBoosterId || Number(transferBoosterId) === selectedOrder.booster?.id || !['BOOSTER_ASSIGNED', 'ASSIGNED', 'IN_PROGRESS'].includes(selectedOrder.status)}
+                    onClick={() => void transferOrder()}
+                    type="button"
+                  >
+                    Transferir pedido
+                  </button>
+                  <button
+                    className="ghost-button admin-order-actions__cancel"
+                    disabled={isManagingOrder || ['COMPLETED', 'CANCELLED', 'REFUNDED'].includes(selectedOrder.status) || ['WAITING_PAYMENT', 'PROCESSING', 'REQUIRES_ACTION'].includes(selectedOrder.payment_status ?? '')}
+                    onClick={() => void cancelOrder()}
+                    type="button"
+                  >
+                    Cancelar pedido
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </section>
         </div>
       ) : null}

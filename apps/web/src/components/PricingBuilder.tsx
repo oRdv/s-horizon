@@ -8,6 +8,7 @@ import {
   Clock3,
   Copy,
   CreditCard,
+  Gamepad2,
   Headphones,
   Loader2,
   Minus,
@@ -19,6 +20,7 @@ import {
   Target,
   TimerReset,
   TrendingUp,
+  UserRound,
   X,
   type LucideIcon,
 } from 'lucide-react'
@@ -36,19 +38,23 @@ import {
   getFixedPriceValue,
   getModeMeta,
   getPriceRow,
+  getWinsUnitPrice,
   isApexTier,
   priceTable,
+  setRuntimePricingTable,
   rankDivisions,
   type GameKey,
   type PriceMode,
   type RankDivision,
   type RankTier,
+  type WinsQueue,
 } from '@/data/pricing'
 import { getApiErrorMessage } from '@/services/api/errors'
 import { getLolChampionOptions, type LolChampionOption } from '@/services/riot'
 import { systemService } from '@/services/system'
 import { useSessionStore } from '@/store/useSessionStore'
 import { useToastStore } from '@/store/useToastStore'
+import { hasPermission } from '@/utils/authz'
 import type {
   PaymentGatewayPayload,
   PaymentMethod,
@@ -56,6 +62,7 @@ import type {
   PaymentTransaction,
   ServiceOrder,
 } from '@/types/system'
+import type { AuthUser } from '@/types/auth'
 
 interface PricingBuilderProps {
   variant?: 'page' | 'dashboard'
@@ -85,6 +92,11 @@ interface FamilyCard {
   icon: LucideIcon
   modes: PriceMode[]
 }
+
+const selectableGames = [
+  { game: 'lol', label: 'League of Legends', helper: 'Solo/Duo no LoL.' },
+  { game: 'wild_rift', label: 'Wild Rift', helper: 'Fila mobile.' },
+] satisfies Array<{ game: Extract<GameKey, 'lol' | 'wild_rift'>; label: string; helper: string }>
 
 interface StepItem {
   index: string
@@ -203,6 +215,8 @@ const familyCards: FamilyCard[] = [
   },
 ]
 
+
+
 const divisionSteps: StepItem[] = [
   {
     index: '1',
@@ -311,7 +325,6 @@ function formatCurrency(value: number | string) {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
-    maximumFractionDigits: 0,
   }).format(Number(value))
 }
 
@@ -721,7 +734,7 @@ function PaymentWizardModal(props: {
     requestAnimationFrame(() => modalRef.current?.focus())
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !isBusy) onClose()
+      if (event.key === 'Escape' && !isBusy && step !== 'pixQr') onClose()
     }
 
     document.addEventListener('keydown', handleKeyDown)
@@ -730,7 +743,7 @@ function PaymentWizardModal(props: {
       document.body.style.overflow = previousOverflow
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [isBusy, onClose, open])
+  }, [isBusy, onClose, open, step])
 
   useEffect(() => {
     if (!open) {
@@ -927,7 +940,10 @@ function PaymentWizardModal(props: {
       setCheckout({ gateway: normalizedGateway, order, transaction })
       setStatus(normalizedGateway.status ?? transaction.status ?? null)
       setCurrentTime(Date.now())
-      setPixCountdownEndsAt(method === 'PIX' ? Date.now() + pixCountdownDurationMs : null)
+      const gatewayExpiry = normalizedGateway.expiresAt ? Date.parse(normalizedGateway.expiresAt) : Number.NaN
+      setPixCountdownEndsAt(method === 'PIX'
+        ? (Number.isFinite(gatewayExpiry) ? gatewayExpiry : Date.now() + pixCountdownDurationMs)
+        : null)
       onOrderCreated?.({ order, transaction })
       setStep(method === 'PIX' ? 'pixQr' : 'card')
     } catch (requestError: unknown) {
@@ -950,14 +966,13 @@ function PaymentWizardModal(props: {
   }
 
   function handleGenerateNewPix() {
-    setOrder(null)
     setCheckout(null)
     setStatus(null)
     setQrCodeDataUrl(null)
     setPixCountdownEndsAt(null)
     setPollingError(null)
     createPaymentInFlightRef.current = false
-    setStep('pixConfirm')
+    void createProviderPayment('PIX')
   }
 
   function continueFromMethod() {
@@ -1014,7 +1029,7 @@ function PaymentWizardModal(props: {
   const methodLabel = selectedOption?.label ?? checkout?.transaction.method ?? 'Pagamento'
 
   const modalNode = (
-    <div className="modal-backdrop" onMouseDown={isBusy ? undefined : onClose}>
+    <div className="modal-backdrop" onMouseDown={isBusy || step === 'pixQr' ? undefined : onClose}>
       <section
         aria-labelledby="payment-wizard-title"
         aria-modal="true"
@@ -1271,17 +1286,49 @@ export function PricingBuilder({
   const addToast = useToastStore((state) => state.addToast)
   const user = useSessionStore((state) => state.user)
   const accessToken = useSessionStore((state) => state.accessToken)
-  const [game] = useState<GameKey>('lol')
+  const [game, setGame] = useState<GameKey>('lol')
   const [mode, setMode] = useState<PriceMode>('solo')
+  const [winsQueue, setWinsQueue] = useState<WinsQueue>('solo')
   const [currentTier, setCurrentTier] = useState<RankTier>('silver')
   const [currentDivision, setCurrentDivision] = useState<RankDivision>('IV')
   const [targetTier, setTargetTier] = useState<RankTier>('gold')
   const [targetDivision, setTargetDivision] = useState<RankDivision>('IV')
   const [unitTier, setUnitTier] = useState<RankTier>('silver')
+  const [unitDivision, setUnitDivision] = useState<RankDivision>('IV')
   const [quantity, setQuantity] = useState(1)
+  const [selectableBoosters, setSelectableBoosters] = useState<AuthUser[]>([])
+  const [selectedBoosterId, setSelectedBoosterId] = useState<number | null>(null)
+  const [isLoadingBoosters, setIsLoadingBoosters] = useState(false)
   const [addons, setAddons] = useState<AddonState>(() => createInitialAddons())
   const [championQuery, setChampionQuery] = useState('')
   const [isChampionPickerOpen, setIsChampionPickerOpen] = useState(false)
+
+  // Only load admin pricing for users with admin permission to avoid leaking
+  // editable pricing to boosters or customers.
+  useEffect(() => {
+    const user = useSessionStore.getState().user
+    if (!user || !hasPermission(user, 'users.view_all')) return
+
+    let active = true
+
+    async function loadAdminPricing() {
+      try {
+        const adminPricing = await systemService.getAdminPricing()
+        if (!active) return
+        if (Array.isArray(adminPricing) && adminPricing.length) {
+          setRuntimePricingTable(adminPricing)
+        }
+      } catch (e) {
+        // ignore — fallback to built-in table
+      }
+    }
+
+    loadAdminPricing()
+
+    return () => {
+      active = false
+    }
+  }, [])
   const [championOptions, setChampionOptions] = useState<LolChampionOption[]>([])
   const [isLoadingChampions, setIsLoadingChampions] = useState(true)
   const [isPaymentWizardOpen, setIsPaymentWizardOpen] = useState(false)
@@ -1292,6 +1339,10 @@ export function PricingBuilder({
   const modeMeta = getModeMeta(mode)
   const gameMeta = gameCatalog[game]
   const gameTiers = useMemo(() => getGameTiers(game), [game])
+  const selectableGameTiers = useMemo(() => mode !== 'wins'
+    ? gameTiers
+    : gameTiers.filter((tier) => getWinsUnitPrice(tier, unitDivision, winsQueue) !== null),
+  [gameTiers, mode, unitDivision, winsQueue])
   const isDivisionMode = activeFamily === 'boost'
   const builderSteps = useMemo(() => {
     const steps = isDivisionMode ? divisionSteps : defaultSteps
@@ -1310,11 +1361,15 @@ export function PricingBuilder({
         mode: mode as Extract<PriceMode, 'wins' | 'md5' | 'coaching'>,
         tier: unitTier,
         quantity,
+        division: unitDivision,
+        winsQueue,
       })
   const baseTotal = quote?.suggestedTotal ?? 0
   const referenceTier = isDivisionMode ? currentTier : unitTier
   const referenceRange = getReferenceRange(mode, referenceTier)
-  const referenceFixedValue = getFixedPriceValue(referenceRange)
+  const referenceFixedValue = mode === 'wins'
+    ? getWinsUnitPrice(unitTier, unitDivision, winsQueue) ?? 0
+    : getFixedPriceValue(referenceRange)
   const invalidLadder =
     isDivisionMode && quote === null
       ? 'Escolha um elo desejado acima do elo atual para liberar a estimativa.'
@@ -1353,6 +1408,37 @@ export function PricingBuilder({
     addons.specificChampions.length > 0 &&
     addons.specificChampions.length <= superRestrictionChampionLimit
   const effectiveSuperRestriction = addons.superRestriction || hasChampionSuperRestriction
+
+  useEffect(() => {
+    if (mode !== 'wins') return
+
+    let active = true
+    setIsLoadingBoosters(true)
+
+    setSelectableBoosters([])
+    setSelectedBoosterId(null)
+
+    void systemService.getSelectableBoosters(game === 'wild_rift' ? 'wild_rift' : 'lol')
+      .then((boosters) => {
+        if (active) setSelectableBoosters(boosters)
+      })
+      .catch(() => {
+        if (active) setSelectableBoosters([])
+      })
+      .finally(() => {
+        if (active) setIsLoadingBoosters(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [game, mode])
+
+  useEffect(() => {
+    if (mode === 'wins' && !selectableGameTiers.includes(unitTier)) {
+      setUnitTier(selectableGameTiers.at(-1) ?? 'silver')
+    }
+  }, [mode, selectableGameTiers, unitTier])
 
   useEffect(() => {
     if (!supportsChampionSelector) {
@@ -1472,13 +1558,14 @@ export function PricingBuilder({
 
     const titleText = isDivisionMode
       ? `${getGameLabel(game)} · ${modeMeta.label} ${quote.ladderText}`
-      : `${getGameLabel(game)} · ${modeMeta.label} ${formatTierDivision(unitTier)}`
+      : `${getGameLabel(game)} · ${modeMeta.label} ${formatTierDivision(unitTier, unitDivision)}`
     const descriptionText = `${modeMeta.shortDescription} ${quote.summary}.`
     const { order } = await systemService.createCustomerPayment({
       service_type: modeMeta.serviceType,
       title: titleText,
       description: descriptionText,
       amount: Math.round(finalTotal * 100),
+      booster_id: mode === 'wins' ? selectedBoosterId ?? undefined : undefined,
       metadata: {
         game,
         calculator_mode: mode,
@@ -1493,10 +1580,13 @@ export function PricingBuilder({
         estimated_delivery_label: deliveryEstimate?.fullLabel ?? null,
         estimated_delivery_deadline: deliveryEstimate?.deadlineLabel ?? null,
         current_tier: isDivisionMode ? currentTier : unitTier,
-        current_division: isDivisionMode && !isApexTier(currentTier) ? currentDivision : null,
+        current_division: isDivisionMode
+          ? (!isApexTier(currentTier) ? currentDivision : null)
+          : (mode === 'wins' && !isApexTier(unitTier) ? unitDivision : null),
         target_tier: isDivisionMode ? targetTier : null,
         target_division: isDivisionMode && !isApexTier(targetTier) ? targetDivision : null,
         quantity: isDivisionMode ? null : quantity,
+        queue: !isDivisionMode && mode === 'wins' ? winsQueue : undefined,
         addons: isDivisionMode
           ? {
               mmr_profile: addons.mmrProfile,
@@ -1642,6 +1732,20 @@ export function PricingBuilder({
         </div>
       </div>
 
+      <div className="pricing-game-rail" aria-label="Jogo">
+        {selectableGames.map((item) => (
+          <button
+            key={item.game}
+            className={`pricing-game-chip${game === item.game ? ' is-active' : ''}`}
+            onClick={() => setGame(item.game)}
+            type="button"
+          >
+            <span className="pricing-game-chip__icon"><Gamepad2 size={16} /></span>
+            <span className="pricing-game-chip__copy"><strong>{item.label}</strong><small>{item.helper}</small></span>
+          </button>
+        ))}
+      </div>
+
       <div className="pricing-family-grid" aria-label="Famílias de serviço">
         {familyCards.map((card) => {
           const Icon = card.icon
@@ -1733,7 +1837,7 @@ export function PricingBuilder({
                 </div>
 
                 <div className="pricing-tier-cloud" role="list" aria-label={isDivisionMode ? 'Elo atual' : 'Elo base'}>
-                  {gameTiers.map((tier) => {
+                  {selectableGameTiers.map((tier) => {
                     const row = getPriceRow(tier)
 
                     return (
@@ -1778,10 +1882,26 @@ export function PricingBuilder({
                     </div>
                   )
                 ) : (
-                  <div className="pricing-range-banner">
-                    <span>Base por unidade</span>
-                    <strong>{formatCurrency(referenceFixedValue)}</strong>
-                  </div>
+                  <>
+                    {mode === 'wins' && !isApexTier(unitTier) ? (
+                      <div className="pricing-division-pills" role="list" aria-label="Divisão atual">
+                        {rankDivisions.map((division) => (
+                          <button
+                            key={division}
+                            className={`pricing-division-pill${unitDivision === division ? ' is-active' : ''}`}
+                            onClick={() => setUnitDivision(division)}
+                            type="button"
+                          >
+                            {division}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className="pricing-range-banner">
+                      <span>Valor por vitória</span>
+                      <strong>{formatCurrency(referenceFixedValue)}</strong>
+                    </div>
+                  </>
                 )}
               </article>
 
@@ -1861,9 +1981,56 @@ export function PricingBuilder({
                       <span>Tipo selecionado</span>
                       <strong>{modeMeta.label}</strong>
                     </div>
+                      {mode === 'wins' ? (
+                        <div className="pricing-wins-queue">
+                          <span className="pricing-wins-queue__label">Fila das vitórias</span>
+                          <div className="pricing-wins-queue__options" role="group" aria-label="Fila das vitórias">
+                            <button className={`pricing-wins-queue__option${winsQueue === 'solo' ? ' is-active' : ''}`} onClick={() => setWinsQueue('solo')} type="button">
+                              <strong>Solo</strong>
+                              <small>O booster joga na sua conta</small>
+                            </button>
+                            <button className={`pricing-wins-queue__option${winsQueue === 'duo' ? ' is-active' : ''}`} onClick={() => setWinsQueue('duo')} type="button">
+                              <strong>Duo Boost</strong>
+                              <small>Você joga junto com o booster</small>
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
                   </div>
                 )}
               </article>
+
+              {!isDivisionMode && mode === 'wins' ? (
+                <article className="pricing-stage-card pricing-stage-card--wide pricing-booster-stage">
+                  <div className="pricing-stage-card__header pricing-booster-stage__header">
+                    <div>
+                      <span className="pricing-stage-card__step">03</span>
+                      <h4>Com quem você quer jogar?</h4>
+                      <p>Escolha um booster da Horizon ou deixe na fila geral. A escolha é opcional.</p>
+                    </div>
+                    <span className="pricing-booster-stage__badge"><CheckCircle size={15} /> Escolha direta</span>
+                  </div>
+                  <div className="pricing-booster-grid">
+                    <button className={`pricing-booster-option${selectedBoosterId === null ? ' is-active' : ''}`} onClick={() => setSelectedBoosterId(null)} type="button">
+                      <span className="pricing-booster-option__avatar"><UserRound size={24} /></span>
+                      <span><strong>Qualquer booster</strong><small>O primeiro disponível assume seu pedido</small></span>
+                      {selectedBoosterId === null ? <CheckCircle className="pricing-booster-option__check" size={20} /> : null}
+                    </button>
+                    {isLoadingBoosters ? <div className="pricing-booster-loading"><Loader2 className="spin-icon" size={20} /> Carregando boosters...</div> : null}
+                    {selectableBoosters.map((booster) => (
+                      <button className={`pricing-booster-option${selectedBoosterId === booster.id ? ' is-active' : ''}`} key={booster.id} onClick={() => setSelectedBoosterId(booster.id)} type="button">
+                        <span className="pricing-booster-option__avatar">{booster.profile_photo_path ? <img alt="" src={booster.profile_photo_path} /> : <UserRound size={24} />}</span>
+                        <span><strong>{booster.name}</strong><small>{booster.booster_profile?.highest_rank ?? 'Booster Horizon'}</small></span>
+                        {selectedBoosterId === booster.id ? <CheckCircle className="pricing-booster-option__check" size={20} /> : null}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="pricing-booster-stage__notice">
+                    <Sparkles size={17} />
+                    <span>{selectedBoosterId === null ? 'Seu pedido será disponibilizado na fila geral após o pagamento.' : 'Após o pagamento, o pedido vai direto para o booster escolhido, sem anúncio no Discord.'}</span>
+                  </div>
+                </article>
+              ) : null}
 
               {isDivisionMode ? (
                 <article className="pricing-stage-card pricing-stage-card--wide">
@@ -2214,7 +2381,7 @@ export function PricingBuilder({
               <span>Elo base</span>
               <span>Solo</span>
               <span>Duo</span>
-              <span>Wins</span>
+              <span>Vitórias Solo</span>
               <span>MD5</span>
               <span>Coaching</span>
             </div>
@@ -2229,7 +2396,7 @@ export function PricingBuilder({
                   </strong>
                   <span>{getEloHighBoostReferenceLabel(row.tier)}</span>
                   <span>{formatCurrency(getFixedPriceValue(row.duo))}</span>
-                  <span>{formatCurrency(getFixedPriceValue(row.wins))}</span>
+                  <span>{getWinsUnitPrice(row.tier, 'IV', 'solo') === null ? 'Sob consulta' : formatCurrency(getWinsUnitPrice(row.tier, 'IV', 'solo')!)}</span>
                   <span>{formatCurrency(getFixedPriceValue(row.md5Package))}</span>
                   <span>{formatCurrency(getFixedPriceValue(row.coaching))}</span>
                 </div>

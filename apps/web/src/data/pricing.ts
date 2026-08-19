@@ -4,6 +4,7 @@ export type DivisionalRankTier = 'iron' | 'bronze' | 'silver' | 'gold' | 'platin
 export type ApexRankTier = 'master' | 'grandmaster' | 'challenger' | 'sovereign'
 export type RankTier = DivisionalRankTier | ApexRankTier
 export type RankDivision = 'IV' | 'III' | 'II' | 'I'
+export type WinsQueue = 'solo' | 'duo'
 
 interface PriceRange {
   min: number
@@ -63,6 +64,37 @@ interface ProgressionStep {
 }
 
 export const rankDivisions: RankDivision[] = ['IV', 'III', 'II', 'I']
+
+const winsPrices: Record<WinsQueue, Partial<Record<RankTier, number | Partial<Record<RankDivision, number>>>>> = {
+  solo: {
+    iron: 2.24,
+    bronze: 2.94,
+    silver: 3.64,
+    gold: 4.34,
+    platinum: 7.14,
+    emerald: 9.94,
+    diamond: { IV: 12.74, III: 14.84, II: 16.24, I: 17.64 },
+    master: 44.24,
+    grandmaster: 65.24,
+  },
+  duo: {
+    iron: 3.5,
+    bronze: 4.2,
+    silver: 5.6,
+    gold: 7,
+    platinum: 9.1,
+    emerald: 16.8,
+    diamond: { IV: 24.5, III: 28, II: 40.6, I: 47.6 },
+  },
+}
+
+export function getWinsUnitPrice(tier: RankTier, division: RankDivision, queue: WinsQueue): number | null {
+  const price = winsPrices[queue][tier]
+
+  if (typeof price === 'number') return price
+
+  return price?.[division] ?? null
+}
 
 export const divisionalRankTiers: DivisionalRankTier[] = [
   'iron',
@@ -248,7 +280,47 @@ export const priceTable: RankPriceRow[] = [
   },
 ]
 
-const rowByTier = Object.fromEntries(priceTable.map((row) => [row.tier, row])) as Record<RankTier, RankPriceRow>
+// Apply optional multipliers from environment to adjust prices without editing code.
+const emeraldMultiplier = Number((import.meta.env?.VITE_PRICE_MULTIPLIER_EMERALD ?? '1')) || 1
+
+function applyMultiplierToRange(range: PriceRange, multiplier: number): PriceRange {
+  return {
+    ...range,
+    min: Math.max(0, Math.round(range.min * multiplier)),
+    max: Math.max(0, Math.round(range.max * multiplier)),
+    plus: range.plus,
+  }
+}
+
+const adjustedPriceTable = priceTable.map((row) => {
+  if (row.tier !== 'emerald' || emeraldMultiplier === 1) {
+    return row
+  }
+
+  return {
+    ...row,
+    solo: applyMultiplierToRange(row.solo, emeraldMultiplier),
+    duo: applyMultiplierToRange(row.duo, emeraldMultiplier),
+    wins: applyMultiplierToRange(row.wins, emeraldMultiplier),
+    md5Package: applyMultiplierToRange(row.md5Package, emeraldMultiplier),
+    md5Equivalent: applyMultiplierToRange(row.md5Equivalent, emeraldMultiplier),
+    coaching: applyMultiplierToRange(row.coaching, emeraldMultiplier),
+  }
+})
+
+// Runtime-adjustable price table: can be replaced by admin-provided pricing
+let runtimeAdjustedPriceTable: RankPriceRow[] = adjustedPriceTable
+
+let rowByTier = Object.fromEntries(runtimeAdjustedPriceTable.map((row) => [row.tier, row])) as Record<RankTier, RankPriceRow>
+
+export function setRuntimePricingTable(rows?: RankPriceRow[]) {
+  runtimeAdjustedPriceTable = Array.isArray(rows) && rows.length ? rows : adjustedPriceTable
+  rowByTier = Object.fromEntries(runtimeAdjustedPriceTable.map((row) => [row.tier, row])) as Record<RankTier, RankPriceRow>
+}
+
+export function getRuntimePriceTable() {
+  return runtimeAdjustedPriceTable
+}
 
 const rankedProgression: ProgressionStep[] = [
   ...divisionalRankTiers.flatMap((tier) =>
@@ -282,8 +354,6 @@ const eloHighBoostStepPrices: Partial<Record<string, number>> = {
   master: 1700,
   grandmaster: 2500,
 }
-
-const eloHighQuoteDiscount = 50
 
 const eloHighBoostStepDays: Partial<Record<string, number>> = {
   iron: 1,
@@ -418,9 +488,6 @@ export function createBoostQuote(input: {
     maxTotal += stepPrice
   }
 
-  minTotal = minTotal > eloHighQuoteDiscount ? minTotal - eloHighQuoteDiscount : minTotal
-  maxTotal = maxTotal > eloHighQuoteDiscount ? maxTotal - eloHighQuoteDiscount : maxTotal
-
   const divisionCount = targetIndex - startIndex
   const touchesApex = isApexTier(input.currentTier) || isApexTier(input.targetTier)
   const unitLabel = touchesApex
@@ -447,12 +514,19 @@ export function createUnitQuote(input: {
   mode: Extract<PriceMode, 'wins' | 'md5' | 'coaching'>
   tier: RankTier
   quantity: number
-}): UnitQuote {
+  division?: RankDivision
+  winsQueue?: WinsQueue
+}): UnitQuote | null {
   const safeQuantity = Math.max(1, Math.min(10, Math.floor(input.quantity || 1)))
   const row = getPriceRow(input.tier)
+  const winsPrice = input.mode === 'wins'
+    ? getWinsUnitPrice(input.tier, input.division ?? 'IV', input.winsQueue ?? 'solo')
+    : null
+  if (input.mode === 'wins' && winsPrice === null) return null
+
   const range =
     input.mode === 'wins'
-      ? row.wins
+      ? { min: winsPrice!, max: winsPrice! }
       : input.mode === 'md5'
         ? row.md5Package
         : row.coaching
@@ -470,10 +544,12 @@ export function createUnitQuote(input: {
   return {
     minTotal,
     maxTotal,
-    suggestedTotal: roundSuggested(minTotal, maxTotal),
+    suggestedTotal: input.mode === 'wins' ? minTotal : roundSuggested(minTotal, maxTotal),
     quantity: safeQuantity,
-    summary: unitLabel,
-    ladderText: `${row.label} base`,
+    summary: input.mode === 'wins' ? `${unitLabel} · ${input.winsQueue === 'duo' ? 'Duo Boost' : 'Solo'}` : unitLabel,
+    ladderText: input.mode === 'wins'
+      ? `${formatTierDivision(input.tier, input.division ?? 'IV')} · ${input.winsQueue === 'duo' ? 'Duo Boost' : 'Solo'}`
+      : `${row.label} base`,
   }
 }
 
@@ -495,7 +571,7 @@ export function getModeMeta(mode: PriceMode) {
       shortDescription: 'Subida na fila Flex com base nos valores de mercado ajustados.',
     },
     wins: {
-      label: 'Wins',
+      label: 'Vitórias',
       serviceType: 'wins_by_rank',
       shortDescription: 'Pacote rápido de vitórias com base no elo selecionado.',
     },

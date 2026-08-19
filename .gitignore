@@ -19,6 +19,7 @@ yarn-error.log*
 # Archives
 *.zip
 *.tar.gz
+/backups/
 
 # OS
 .DS_Store

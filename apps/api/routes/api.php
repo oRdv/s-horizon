@@ -29,6 +29,7 @@ Route::prefix('auth')->group(function (): void {
 
 Route::post('/booster-applications/public', [BoosterApplicationController::class, 'publicStore']);
 Route::get('/landing/boosters', [LandingBoosterController::class, 'publicIndex']);
+Route::get('/boosters/selectable', [LandingBoosterController::class, 'selectable']);
 Route::post('/payments/stripe/webhook', [PaymentController::class, 'stripeWebhook']);
 Route::post('/payments/mercado-pago/webhook', [PaymentController::class, 'mercadoPagoWebhook']);
 Route::get('/booster-tracker/downloads/{platform}/signed', [BoosterTrackerController::class, 'signedDownload'])
@@ -82,6 +83,8 @@ Route::middleware('auth.jwt')->group(function (): void {
             ->middleware('permission:users.manage');
         Route::delete('/landing-boosters/{landingBooster}', [LandingBoosterController::class, 'destroy'])
             ->middleware('permission:users.manage');
+        Route::get('/pricing', [\App\Http\Controllers\Api\Admin\PricingController::class, 'index']);
+        Route::put('/pricing', [\App\Http\Controllers\Api\Admin\PricingController::class, 'update']);
     });
 
     Route::prefix('profile')->group(function (): void {
@@ -117,6 +120,10 @@ Route::middleware('auth.jwt')->group(function (): void {
         Route::post('/{serviceOrder}/game-account', [ServiceOrderController::class, 'storeGameAccount']);
         Route::post('/{serviceOrder}/claim', [ServiceOrderController::class, 'claim']);
         Route::post('/{serviceOrder}/complete', [ServiceOrderController::class, 'complete']);
+        Route::patch('/{serviceOrder}/transfer', [ServiceOrderController::class, 'transfer'])
+            ->middleware('role:master_admin');
+        Route::patch('/{serviceOrder}/cancel', [ServiceOrderController::class, 'cancel'])
+            ->middleware('role:master_admin');
     });
 
     Route::prefix('conversations')->group(function (): void {

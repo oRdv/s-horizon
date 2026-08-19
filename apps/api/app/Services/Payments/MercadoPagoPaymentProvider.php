@@ -21,8 +21,10 @@ final class MercadoPagoPaymentProvider
             throw new PaymentConfigurationException('Mercado Pago nao configurado: defina MERCADO_PAGO_ACCESS_TOKEN no backend.');
         }
 
-        $expiresAt = Carbon::now('America/Sao_Paulo')->addMinutes(30);
-        $dateOfExpiration = $expiresAt->format('Y-m-d\TH:i:s.000P');
+        $expiresAt = Carbon::now()->addMinutes(30);
+        $dateOfExpiration = $expiresAt->copy()
+            ->setTimezone('America/Sao_Paulo')
+            ->format('Y-m-d\TH:i:s.000P');
 
         $transactionAmount = $this->providerAmount($payment->final_amount);
         if ($transactionAmount < 1) {
@@ -78,6 +80,12 @@ final class MercadoPagoPaymentProvider
                 'status' => $response->status(),
                 'response' => $response->json() ?? $response->body(),
             ]);
+
+            if (in_array($response->status(), [401, 403], true)) {
+                throw new PaymentConfigurationException(
+                    'PIX temporariamente indisponível: a conta Mercado Pago não autorizou a cobrança. Contate o suporte.'
+                );
+            }
 
             throw new RuntimeException($response->json('message') ?? data_get($response->json(), 'cause.0.description') ?? 'Mercado Pago recusou a criacao do Pix.');
         }

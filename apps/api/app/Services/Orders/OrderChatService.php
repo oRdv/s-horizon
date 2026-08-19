@@ -60,7 +60,7 @@ final class OrderChatService
         throw new AuthorizationException('Voce nao tem acesso ao chat deste pedido.');
     }
 
-    public function assertCanSend(ServiceOrder $order): void
+    public function assertCanSend(ServiceOrder $order, User $user): void
     {
         if (! $this->isChatAvailable($order)) {
             throw ValidationException::withMessages([
@@ -68,12 +68,12 @@ final class OrderChatService
             ]);
         }
 
-        if (in_array($order->status, [
-            ServiceOrderStatus::Completed->value,
-            ServiceOrderStatus::Cancelled->value,
-        ], true)) {
+        if (
+            $order->status === ServiceOrderStatus::Cancelled->value
+            || ($order->status === ServiceOrderStatus::Completed->value && ! $user->hasRole(UserRole::MasterAdmin))
+        ) {
             throw ValidationException::withMessages([
-                'chat' => 'Nao e possivel enviar mensagens em pedido finalizado ou cancelado.',
+                'chat' => 'Nao e possivel enviar mensagens neste pedido.',
             ]);
         }
     }

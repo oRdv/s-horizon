@@ -12,8 +12,10 @@ use App\Models\User;
 use App\Services\Notifications\OrderNotificationService;
 use App\Services\Orders\OrderChatService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 use RuntimeException;
+use Throwable;
 
 final class PaymentService
 {
@@ -125,10 +127,16 @@ final class PaymentService
         });
 
         if (! $this->hasProviderPayload($payment)) {
-            $gateway = match ($provider) {
-                PaymentProvider::Stripe => $this->createStripePaymentIntent($payment),
-                PaymentProvider::MercadoPago => $this->createMercadoPagoPix($payment),
-            };
+            try {
+                $gateway = match ($provider) {
+                    PaymentProvider::Stripe => $this->createStripePaymentIntent($payment),
+                    PaymentProvider::MercadoPago => $this->createMercadoPagoPix($payment),
+                };
+            } catch (Throwable $exception) {
+                $this->markFailed($payment, PaymentStatus::Failed, ['error' => $exception->getMessage()]);
+
+                throw $exception;
+            }
 
             return ['payment' => $payment->refresh(), 'gateway' => $gateway];
         }
@@ -176,7 +184,10 @@ final class PaymentService
 
         if ($payment->serviceOrder?->booster_id) {
             app(OrderChatService::class)->ensureConversation($payment->serviceOrder->refresh());
-            app(OrderNotificationService::class)->assigned($payment->serviceOrder->refresh());
+            $channels = data_get($payment->serviceOrder->metadata ?? [], 'assignment.source') === 'customer_selection'
+                ? ['email']
+                : null;
+            app(OrderNotificationService::class)->assigned($payment->serviceOrder->refresh(), $channels);
         } else {
             app(OrderNotificationService::class)->available($payment->serviceOrder->refresh()->loadMissing('customer'));
         }
@@ -256,6 +267,38 @@ final class PaymentService
         }
 
         return $payment->refresh();
+    }
+
+    public function reconcilePendingMercadoPagoPayments(): int
+    {
+        $updated = 0;
+
+        Payment::query()
+            ->where('provider', PaymentProvider::MercadoPago->value)
+            ->whereIn('status', [
+                PaymentStatus::WaitingPayment->value,
+                PaymentStatus::Processing->value,
+            ])
+            ->whereNotNull('provider_payment_id')
+            ->where('created_at', '>=', now()->subDay())
+            ->where('updated_at', '<=', now()->subMinute())
+            ->oldest()
+            ->limit(50)
+            ->get()
+            ->each(function (Payment $payment) use (&$updated): void {
+                try {
+                    $status = $payment->status;
+                    $reconciled = $this->reconcileProviderStatus($payment);
+                    $updated += $reconciled->status !== $status ? 1 : 0;
+                } catch (Throwable $exception) {
+                    Log::warning('payments.scheduled_reconcile_failed', [
+                        'payment_id' => $payment->getKey(),
+                        'message' => $exception->getMessage(),
+                    ]);
+                }
+            });
+
+        return $updated;
     }
 
     public function applyMercadoPagoStatus(Payment $payment, array $providerPayment): Payment

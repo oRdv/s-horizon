@@ -4,6 +4,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { ToastViewport } from '@/components/ToastViewport'
 import { AdminUsersPage } from '@/pages/AdminUsersPage'
+import { AdminPricingPage } from '@/pages/AdminPricingPage'
 import { BoosterApplicationPage } from '@/pages/BoosterApplicationPage'
 import { BoosterOrderDetailPage } from '@/pages/BoosterOrderDetailPage'
 import { BoosterOrdersPage } from '@/pages/BoosterOrdersPage'
@@ -126,6 +127,14 @@ function App() {
         />
         <Route
           element={
+            <ProtectedRoute permissions={['users.view_all']}>
+              <AdminPricingPage />
+            </ProtectedRoute>
+          }
+          path="/admin/pricing"
+        />
+        <Route
+          element={
             <ProtectedRoute
               permissions={[
                 'finance.control.view',
@@ -169,7 +178,7 @@ function App() {
         />
         <Route
           element={
-            <ProtectedRoute roles={['customer']}>
+            <ProtectedRoute roles={['customer', 'master_admin']}>
               <OrdersPage />
             </ProtectedRoute>
           }
