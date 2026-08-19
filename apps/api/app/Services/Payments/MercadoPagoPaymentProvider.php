@@ -81,6 +81,12 @@ final class MercadoPagoPaymentProvider
                 'response' => $response->json() ?? $response->body(),
             ]);
 
+            if (in_array($response->status(), [401, 403], true)) {
+                throw new PaymentConfigurationException(
+                    'PIX temporariamente indisponível: a conta Mercado Pago não autorizou a cobrança. Contate o suporte.'
+                );
+            }
+
             throw new RuntimeException($response->json('message') ?? data_get($response->json(), 'cause.0.description') ?? 'Mercado Pago recusou a criacao do Pix.');
         }
 

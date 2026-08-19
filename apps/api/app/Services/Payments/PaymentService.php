@@ -127,10 +127,16 @@ final class PaymentService
         });
 
         if (! $this->hasProviderPayload($payment)) {
-            $gateway = match ($provider) {
-                PaymentProvider::Stripe => $this->createStripePaymentIntent($payment),
-                PaymentProvider::MercadoPago => $this->createMercadoPagoPix($payment),
-            };
+            try {
+                $gateway = match ($provider) {
+                    PaymentProvider::Stripe => $this->createStripePaymentIntent($payment),
+                    PaymentProvider::MercadoPago => $this->createMercadoPagoPix($payment),
+                };
+            } catch (Throwable $exception) {
+                $this->markFailed($payment, PaymentStatus::Failed, ['error' => $exception->getMessage()]);
+
+                throw $exception;
+            }
 
             return ['payment' => $payment->refresh(), 'gateway' => $gateway];
         }

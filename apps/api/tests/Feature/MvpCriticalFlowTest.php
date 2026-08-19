@@ -243,6 +243,57 @@ class MvpCriticalFlowTest extends TestCase
         $this->assertNotEmpty(data_get($metadata, 'game_account.password_encrypted'));
     }
 
+    public function test_mercado_pago_authorization_failure_does_not_leave_pending_payment(): void
+    {
+        config([
+            'payments.backend_url' => 'https://api.horizonboost.test',
+            'services.mercado_pago.access_token' => 'REVOKED_MP_TOKEN',
+        ]);
+        Http::fake([
+            'https://api.mercadopago.com/v1/payments' => Http::response([
+                'code' => 'PA_UNAUTHORIZED_RESULT_FROM_POLICIES',
+                'message' => 'At least one policy returned UNAUTHORIZED.',
+            ], 403),
+        ]);
+
+        $customer = $this->user(UserRole::Customer, 'cliente-win-pix-falha@horizonboost.gg');
+        $token = $this->loginToken($customer);
+        $order = ServiceOrder::query()->create([
+            'customer_id' => $customer->getKey(),
+            'created_by' => $customer->getKey(),
+            'service_type' => 'wins_by_rank',
+            'title' => 'League of Legends · Wins Diamante IV',
+            'status' => ServiceOrderStatus::Pending->value,
+            'price' => 20,
+            'base_price' => 2000,
+            'final_price' => 2000,
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/payments/create', [
+                'boostId' => $order->getKey(),
+                'orderId' => $order->getKey(),
+                'method' => PaymentMethod::Pix->value,
+            ])
+            ->assertStatus(503)
+            ->assertJsonPath('error.code', 'PAYMENT_PROVIDER_NOT_CONFIGURED')
+            ->assertJsonPath('message', 'PIX temporariamente indisponível: a conta Mercado Pago não autorizou a cobrança. Contate o suporte.');
+
+        $this->assertDatabaseHas('payments', [
+            'order_id' => $order->getKey(),
+            'status' => PaymentStatus::Failed->value,
+        ]);
+        $this->assertDatabaseHas('service_orders', [
+            'id' => $order->getKey(),
+            'payment_status' => PaymentStatus::Failed->value,
+            'status' => ServiceOrderStatus::Failed->value,
+        ]);
+        $this->assertDatabaseMissing('payments', [
+            'order_id' => $order->getKey(),
+            'status' => PaymentStatus::WaitingPayment->value,
+        ]);
+    }
+
     public function test_customer_can_resume_pix_and_generate_another_for_the_same_order_after_expiration(): void
     {
         config([
